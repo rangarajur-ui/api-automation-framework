@@ -1,0 +1,19 @@
+<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
+<suite name="Sanity Suite">
+    <listeners>
+        <listener class-name="tests.report.ExtentReportListener"/>
+    </listeners>
+    <test name="Sanity">
+        <groups>
+            <run>
+                <include name="sanity"/>
+            </run>
+        </groups>
+        <classes>
+            <class name="tests.SanityTests"/>
+            <class name="tests.CartVariantTests"/>
+            <class name="tests.CustomerDetailsTests"/>
+            <class name="tests.InstructionTests"/>
+        </classes>
+    </test>
+</suite>

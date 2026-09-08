@@ -1,0 +1,16 @@
+<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
+<suite name="Customization Suite">
+    <listeners>
+        <listener class-name="tests.report.ExtentReportListener"/>
+    </listeners>
+    <test name="Customization">
+        <groups>
+            <run>
+                <include name="customization"/>
+            </run>
+        </groups>
+        <classes>
+            <class name="tests.CustomizationItemTests"/>
+        </classes>
+    </test>
+</suite>

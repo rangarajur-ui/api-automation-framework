@@ -1,0 +1,17 @@
+<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
+<suite name="Negative Suite">
+    <listeners>
+        <listener class-name="tests.report.ExtentReportListener"/>
+    </listeners>
+    <test name="Negative">
+        <groups>
+            <run>
+                <include name="negative"/>
+            </run>
+        </groups>
+        <classes>
+            <class name="tests.NegativeTests"/>
+            <class name="tests.CustomerDetailsTests"/>
+        </classes>
+    </test>
+</suite>
