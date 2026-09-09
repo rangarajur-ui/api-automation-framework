@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Paytm QR Order Automation — How this project works</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,560;9..144,650&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="guide.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="wrap topbar-inner">
+      <div class="brand">QR Order Automation</div>
+      <nav class="nav">
+        <a href="#story">Guest journey</a>
+        <a href="#start">Where it starts</a>
+        <a href="#folders">Folders</a>
+        <a href="#suites">What we check</a>
+        <a href="#servers">Test vs Staging</a>
+        <a href="#run">How to run</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="hero">
+      <div class="eyebrow">Shared guide for product, QA, and anyone new to this repo</div>
+      <h1>A guest scans a QR, pays, and the kitchen gets a real order. These tests prove that path end to end.</h1>
+      <p class="lead">
+        This is not a mock. On a pass, someone at the table could have paid on Telr,
+        the cart became an accepted order, and the back-office OMS shows the same items,
+        totals, guest name, and item notes.
+      </p>
+      <div class="audience">
+        <span class="chip">Product: what “done” means</span>
+        <span class="chip">Fresher QA: which file starts first</span>
+        <span class="chip">Non-tech: same story, two restaurants</span>
+      </div>
+    </section>
+
+    <section class="grid-3">
+      <article class="card">
+        <h3>What we automate</h3>
+        <p>Dine-in QR Order &amp; Pay on Paytm Checkout. Scan code → menu → cart → Telr card page → paid order → OMS confirmation.</p>
+      </article>
+      <article class="card">
+        <h3>What a PASS means</h3>
+        <p>Payment status is <strong>payment_success</strong>, order status is <strong>order_accepted</strong>, OMS matches the cart, and notes sit on the line item — not on the whole order.</p>
+      </article>
+      <article class="card">
+        <h3>What we never store in Git</h3>
+        <p>Card number, CVV, OMS session tokens, slip URLs. Those stay on the machine or in Jenkins. Reports mask mobiles (last 4 only).</p>
+      </article>
+    </section>
+
+    <section id="story">
+      <h2>1. The guest journey — and where the test finishes</h2>
+      <p class="section-intro">
+        Click a step. The same seven steps run on the test restaurant and the staging restaurant.
+        The finish is step 7: OMS back office, not “payment URL received”.
+      </p>
+      <div class="flow" id="flow">
+        <button class="step active" data-step="1" type="button">
+          <b class="step-num">01</b>
+          <strong>Open QR session</strong>
+          <span>Guest scans the table QR.</span>
+        </button>
+        <button class="step" data-step="2" type="button">
+          <b class="step-num">02</b>
+          <strong>Add items</strong>
+          <span>Phirni × 2 + Dates × 1.</span>
+        </button>
+        <button class="step" data-step="3" type="button">
+          <b class="step-num">03</b>
+          <strong>Start payment</strong>
+          <span>Server returns a Telr link.</span>
+        </button>
+        <button class="step" data-step="4" type="button">
+          <b class="step-num">04</b>
+          <strong>Pay on Telr</strong>
+          <span>Chrome fills the hosted page.</span>
+        </button>
+        <button class="step" data-step="5" type="button">
+          <b class="step-num">05</b>
+          <strong>Payment result</strong>
+          <span>Must be payment_success.</span>
+        </button>
+        <button class="step" data-step="6" type="button">
+          <b class="step-num">06</b>
+          <strong>Guest receipt</strong>
+          <span>Confirmation cart + order number.</span>
+        </button>
+        <button class="step" data-step="7" type="button">
+          <b class="step-num">07</b>
+          <strong>OMS kitchen view</strong>
+          <span>This is the real finish.</span>
+        </button>
+      </div>
+      <div class="detail" id="flow-detail"></div>
+    </section>
+
+    <section id="start">
+      <h2>2. Where a run starts — first files in order</h2>
+      <p class="section-intro">
+        You never open a test class first. The command (or Jenkins) wakes Maven. Maven reads
+        <span class="file">pom.xml</span>. That file decides the suite and the server.
+      </p>
+      <div class="start">
+        <div class="start-row">
+          <div class="badge">1</div>
+          <div>
+            <strong>You or Jenkins type a command</strong>
+            <p>Example: <span class="file">mvn test -Pregression -Denv=staging</span>. Default with only <span class="file">mvn test</span> is smoke on the <strong>test</strong> server.</p>
+          </div>
+        </div>
+        <div class="start-row">
+          <div class="badge">2</div>
+          <div>
+            <strong>First project file: <span class="file">pom.xml</span></strong>
+            <p>Picks the TestNG XML (smoke / sanity / regression / …) and passes <span class="file">-Denv</span> into the tests. Java 21. Surefire runs TestNG.</p>
+          </div>
+        </div>
+        <div class="start-row">
+          <div class="badge">3</div>
+          <div>
+            <strong>Suite list: <span class="file">src/test/resources/testng-*.xml</span></strong>
+            <p>Regression uses <span class="file">testng-regression.xml</span>. It names the test classes and turns on the HTML report listener.</p>
+          </div>
+        </div>
+        <div class="start-row">
+          <div class="badge">4</div>
+          <div>
+            <strong>Server + data (loaded before any assert)</strong>
+            <p>
+              <span class="file">ConfigReader</span> reads <span class="file">config.properties</span> (test) or <span class="file">config-staging.properties</span> (staging).<br>
+              <span class="file">TestDataReader</span> reads <span class="file">testdata.properties</span> or <span class="file">testdata-staging.properties</span> — QR code, item IDs, expected totals.
+            </p>
+          </div>
+        </div>
+        <div class="start-row">
+          <div class="badge">5</div>
+          <div>
+            <strong>A test class runs</strong>
+            <p>Example: <span class="file">InstructionTests</span>. It asks <span class="file">QrTestHelper</span> for a fresh session and a cart. That helper calls the API classes.</p>
+          </div>
+        </div>
+        <div class="start-row">
+          <div class="badge">6</div>
+          <div>
+            <strong>Checkout finish: <span class="file">CheckoutFlow.payAndConfirm</span></strong>
+            <p>Telr browser → payment status → confirmation cart → OMS details. If OMS tokens are missing, checkout fails even if payment succeeded.</p>
+          </div>
+        </div>
+        <div class="start-row">
+          <div class="badge">7</div>
+          <div>
+            <strong>Report: <span class="file">ExtentReportListener</span></strong>
+            <p>Writes <span class="file">reports/extent-report.html</span>. Jenkins publishes that page. Console also prints the same business lines.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="folders">
+      <h2>3. How the folders connect</h2>
+      <p class="section-intro">Think of three layers: <strong>what the business expects</strong>, <strong>how we talk to Paytm</strong>, and <strong>the stories we run</strong>.</p>
+      <div class="legend">
+        <span><i class="dot" style="background:#b4532a"></i>Settings</span>
+        <span><i class="dot" style="background:#2a4d6e"></i>Talk to the server</span>
+        <span><i class="dot" style="background:#2f6b45"></i>Stories / checks</span>
+      </div>
+
+      <details class="folder" open>
+        <summary>pom.xml and Jenkinsfile — the front door</summary>
+        <p><span class="file">pom.xml</span> is the first file Maven reads. <span class="file">Jenkinsfile</span> is the first file Jenkins reads. Jenkins only runs the same Maven command you run locally, plus Telr secrets and a copy of OMS tokens from the Jenkins machine.</p>
+      </details>
+
+      <details class="folder">
+        <summary>src/test/resources — which restaurant and which numbers</summary>
+        <p>
+          <span class="file">config.properties</span> / <span class="file">config-staging.properties</span> = host URLs (QR site + OMS).<br>
+          <span class="file">testdata.properties</span> / <span class="file">testdata-staging.properties</span> = QR code, item IDs, 20.00 cart, expected statuses.<br>
+          <span class="file">testng-*.xml</span> = which test classes belong to smoke, sanity, regression.<br>
+          OMS token files are gitignored. Never commit them.
+        </p>
+      </details>
+
+      <details class="folder">
+        <summary>src/main/java/config — first Java used by every test</summary>
+        <p><span class="file">ConfigReader</span> and <span class="file">TestDataReader</span> load the files above. If <span class="file">env=staging</span>, they switch files. No test hardcodes the live host.</p>
+      </details>
+
+      <details class="folder">
+        <summary>src/main/java/api — one class per Paytm call</summary>
+        <p>
+          <span class="file">ApiRequestSpec</span> sets base URL and JSON headers.<br>
+          <span class="file">QrMenuApi</span> opens the session.<br>
+          <span class="file">CartApi</span> adds items / reads confirmation.<br>
+          <span class="file">PaymentApi</span> starts Telr and later fetches status.<br>
+          <span class="file">ApiCall</span> retries if the server drops TLS (the Jenkins handshake flake).
+        </p>
+      </details>
+
+      <details class="folder">
+        <summary>src/main/java/pojo — shapes of request and response</summary>
+        <p>These are field names the live API actually returns. We do not invent columns. Cart items are a positional table (not pretty JSON objects). OMS models live under <span class="file">pojo/response/oms</span>.</p>
+      </details>
+
+      <details class="folder">
+        <summary>src/test/java/tests — the stories</summary>
+        <p>
+          <span class="file">SmokeTests</span> — session, 20.00 cart, Telr URL. No card pay.<br>
+          <span class="file">SanityTests</span> — account name, pending cart, customizable menu item.<br>
+          <span class="file">NegativeTests</span> — bad QR, empty cart, unknown item, bad payment link, short mobile.<br>
+          <span class="file">CustomizationItemTests</span>, <span class="file">CartVariantTests</span>, <span class="file">CustomerDetailsTests</span>, <span class="file">InstructionTests</span>, <span class="file">RegressionTests</span> — full Telr + OMS.<br>
+          <span class="file">QrOrderFlowTest</span> — long e2e only (<span class="file">-Pe2e</span>).
+        </p>
+      </details>
+
+      <details class="folder">
+        <summary>src/test/java/tests/support — shared checkout</summary>
+        <p><span class="file">QrTestHelper</span> builds the baseline cart and a fresh session. <span class="file">CheckoutFlow</span> is the finish line: pay, confirm, read OMS. Every positive “create order” test goes through it so we do not stop at initiate_payment.</p>
+      </details>
+
+      <details class="folder">
+        <summary>src/test/java/ui and config (secrets)</summary>
+        <p><span class="file">TelrHostedPage</span> drives Chrome on Telr. <span class="file">TelrCardDetails</span> and <span class="file">OmsCredentials</span> read env vars or local gitignored files. <span class="file">OmsApi</span> calls back-office order details.</p>
+      </details>
+    </section>
+
+    <section id="suites">
+      <h2>4. What each suite is for</h2>
+      <p class="section-intro">Product can read the left column. QA uses the command on the right.</p>
+      <div class="grid-2">
+        <article class="card">
+          <div class="suite"><h3>Smoke</h3><span class="tag soft">API only</span></div>
+          <p>Can we open the QR, build the 20.00 cart, and get a Telr link? Fast. No card. No OMS.</p>
+          <p><span class="file">mvn test</span> or <span class="file">-Psmoke</span></p>
+        </article>
+        <article class="card">
+          <div class="suite"><h3>Negative</h3><span class="tag warn">Must reject</span></div>
+          <p>Bad QR, unknown item, empty cart, broken payment link, short mobile. Expect HTTP 422 and a clear message.</p>
+          <p><span class="file">mvn test -Pnegative</span></p>
+        </article>
+        <article class="card">
+          <div class="suite"><h3>Sanity / Customization / Regression</h3><span class="tag">Full checkout</span></div>
+          <p>Real Telr pay. Order must be accepted. OMS must match. Regression is the full pack (22 tests).</p>
+          <p><span class="file">mvn test -Pregression -Denv=test</span></p>
+        </article>
+        <article class="card">
+          <div class="suite"><h3>E2E</h3><span class="tag">Full checkout</span></div>
+          <p>The long original flow class only. Same finish: Telr + OMS.</p>
+          <p><span class="file">mvn test -Pe2e -Denv=test</span></p>
+        </article>
+      </div>
+
+      <div class="callout" style="margin-top:18px">
+        <strong>Baseline basket (both servers):</strong> Kesar Pista Phirni quantity 2 (price 8) + Special Dates quantity 1 (price 4) = <strong>20.00</strong>, tax <strong>0.95</strong>, net <strong>20.00</strong>, provider <strong>Telr</strong>.
+        Item IDs differ by restaurant. Product names and money stay the same.
+      </div>
+    </section>
+
+    <section id="servers">
+      <h2>5. Two servers, same flow, different restaurants</h2>
+      <p class="section-intro">The tests do not change. Only the settings file changes. Pick a tab.</p>
+      <div class="tabs">
+        <button class="tab active" type="button" data-env="test">Test server</button>
+        <button class="tab" type="button" data-env="staging">Staging server</button>
+      </div>
+      <div class="card" id="env-panel"></div>
+      <p class="section-intro" style="margin-top:16px">Same on both: Telr cards, guest names, “No onions please” on Phirni only, size “2 pieces” = 9.00, biryani + dip = 48.00, OMS status <strong>success</strong> / method <strong>payment_gateway</strong> / type <strong>qsr</strong>.</p>
+    </section>
+
+    <section id="checks">
+      <h2>6. What OMS must show after a paid order</h2>
+      <div class="grid-2">
+        <article class="card">
+          <h3>Always</h3>
+          <p>Same order id and order number as payment. Status <strong>order_accepted</strong>. Payment <strong>success</strong>. Method <strong>payment_gateway</strong>. Account / tenant id of that restaurant. Timeline accepted. Audit events payment_completed and order_accepted. Totals match the cart.</p>
+        </article>
+        <article class="card">
+          <h3>When the story needs it</h3>
+          <p>Guest name on OMS (cart does not echo name). Item notes on Phirni only. Size name contains “2 pieces”. Add-on may collapse to one OMS line with customization text (example: Biryani Salan Dip). Cooking details are sent; OMS does not echo them — we do not fake a pass on that text.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="run">
+      <h2>7. How to run — laptop and Jenkins</h2>
+      <div class="grid-2">
+        <article class="card">
+          <h3>On your laptop</h3>
+          <p><span class="file">mvn test</span> — smoke, test server</p>
+          <p><span class="file">mvn test -Pregression -Denv=test</span> — testdeploy channel + OMS</p>
+          <p><span class="file">mvn test -Pregression -Denv=staging</span> — sprint205 + OMS</p>
+          <p>Need Chrome, Telr cards in env or <span class="file">telr.local.properties</span>, and OMS tokens in the matching gitignored file.</p>
+        </article>
+        <article class="card">
+          <h3>On Jenkins (API-Deploy)</h3>
+          <p>Open <strong>Build with Parameters</strong>.</p>
+          <p><strong>SUITE</strong> = smoke / regression / …</p>
+          <p><strong>ENV</strong> = test or staging</p>
+          <p>Telr comes from Jenkins Secret text. OMS comes from files on the Jenkins machine: <span class="file">~/.jenkins/oms/test.properties</span> and <span class="file">staging.properties</span>. Do not put those in Git.</p>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <h2>8. For freshers — “I opened the repo, what do I read first?”</h2>
+      <div class="start">
+        <div class="start-row">
+          <div class="badge">A</div>
+          <div><strong>This page</strong> — you are here. Then the guest journey above.</div>
+        </div>
+        <div class="start-row">
+          <div class="badge">B</div>
+          <div><strong><span class="file">pom.xml</span></strong> — how commands map to suites.</div>
+        </div>
+        <div class="start-row">
+          <div class="badge">C</div>
+          <div><strong><span class="file">testdata.properties</span></strong> — the numbers we assert (20.00, item ids, notes text).</div>
+        </div>
+        <div class="start-row">
+          <div class="badge">D</div>
+          <div><strong><span class="file">tests/support/CheckoutFlow.java</span></strong> — the finish of every paid order.</div>
+        </div>
+        <div class="start-row">
+          <div class="badge">E</div>
+          <div><strong><span class="file">tests/InstructionTests.java</span></strong> — shortest story that proves item-level notes on OMS.</div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>9. Words used in reports</h2>
+      <table class="compare">
+        <tr><th>Word</th><th>Plain meaning</th></tr>
+        <tr><td>QR code</td><td>The table code in the menu URL. Test and staging codes are different.</td></tr>
+        <tr><td>Session token</td><td>Temporary guest key after opening the menu. We only log “present”.</td></tr>
+        <tr><td>ct</td><td>Token on the URL after Telr sends the guest back. Not returned by initiate_payment.</td></tr>
+        <tr><td>Telr</td><td>The card page. Tests complete it with a test card.</td></tr>
+        <tr><td>OMS</td><td>Outlet / kitchen back office. Different login per restaurant.</td></tr>
+        <tr><td>Item notes</td><td>Text on one product line (example: No onions please on Phirni only).</td></tr>
+        <tr><td>Cooking details</td><td>Order-level text we send. Confirmation and OMS do not return it today.</td></tr>
+      </table>
+    </section>
+
+    <footer>
+      Open this file in a browser. Use Print → Save as PDF if you need a PDF.
+      Last aligned with the live test (testdeploy channel) and staging (sprint205) QR flows.
+    </footer>
+  </main>
+
+  <script>
+    const steps = {
+      1: "<strong>01 · Open QR session</strong><p>API: <code>POST /qr_online_order/{code}</code>. File: <code>QrMenuApi</code>. We keep the session token. We check the account: testdeploy channel (1141) or sprint205 (1150).</p>",
+      2: "<strong>02 · Add items</strong><p>API: <code>POST /qr_view_cart/{code}</code>. File: <code>CartApi</code> + <code>QrTestHelper.baselineCart()</code>. Cart must be 20.00, tax 0.95, status <code>payment_pending</code>, provider Telr. Customization and notes are added here when the story needs them.</p>",
+      3: "<strong>03 · Start payment</strong><p>API: <code>POST /initiate_payment/{code}</code>. File: <code>PaymentApi</code>. Success + Telr URL + order id. Mobile on this call is country code + number (example +971888888888). This is <em>not</em> the finish.</p>",
+      4: "<strong>04 · Pay on Telr</strong><p>File: <code>TelrHostedPage</code>. Chrome opens the hosted page and submits the test card. Missing cards fail the test — we do not skip.</p>",
+      5: "<strong>05 · Payment result</strong><p>Telr returns to Paytm with <code>ct</code> on the URL. API: <code>GET /fetch_payment_status_by_session_id/{code}?ct=…</code>. Must be <code>payment_success</code> and <code>order_accepted</code> with an order number.</p>",
+      6: "<strong>06 · Guest receipt</strong><p>API: <code>POST /qr_view_cart/{code}.json?view=customer&amp;ct=…</code>. Confirmation items and totals must match the cart. Order number must match payment status. After payment, compare name, qty, and money — not always item object id.</p>",
+      7: "<strong>07 · OMS — the finish</strong><p>API: <code>GET /m/oms/orders/{id}/details.json</code>. File: <code>OmsApi</code>. Test host is portal.test for testdeploy. Staging host is dashboard.staging for sprint205. We check status, payment, tenant, items, and item-level notes. Slip URLs are never logged.</p>"
+    };
+
+    const envs = {
+      test: `<h3>Test server — testdeploy channel</h3>
+        <table class="compare">
+          <tr><th>What</th><th>Value</th></tr>
+          <tr><td>QR site</td><td>biz.test.paytmcheckout.com</td></tr>
+          <tr><td>QR code</td><td>eLzWyast1V</td></tr>
+          <tr><td>Account</td><td>1141 · testdeploy channel</td></tr>
+          <tr><td>Baseline items</td><td>10667 Phirni · 10668 Special Dates</td></tr>
+          <tr><td>OMS</td><td>biz.portal.test.paytmcheckout.com</td></tr>
+          <tr><td>Command</td><td><code>mvn test -Pregression -Denv=test</code></td></tr>
+        </table>`,
+      staging: `<h3>Staging server — sprint205</h3>
+        <table class="compare">
+          <tr><th>What</th><th>Value</th></tr>
+          <tr><td>QR site</td><td>biz.staging.paytmcheckout.com</td></tr>
+          <tr><td>QR code</td><td>oXTMIhE2WV</td></tr>
+          <tr><td>Account</td><td>1150 · sprint205</td></tr>
+          <tr><td>Baseline items</td><td>11905 Phirni · 11906 Special Dates</td></tr>
+          <tr><td>OMS</td><td>biz.dashboard.staging.paytmcheckout.com</td></tr>
+          <tr><td>Command</td><td><code>mvn test -Pregression -Denv=staging</code></td></tr>
+        </table>`
+    };
+
+    const detail = document.getElementById("flow-detail");
+    detail.innerHTML = steps[1];
+    document.querySelectorAll(".step").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".step").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        detail.innerHTML = steps[btn.dataset.step];
+      });
+    });
+
+    const panel = document.getElementById("env-panel");
+    panel.innerHTML = envs.test;
+    document.querySelectorAll(".tab").forEach((tab) => {
+      tab.addEventListener("click", () => {
+        document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
+        tab.classList.add("active");
+        panel.innerHTML = envs[tab.dataset.env];
+      });
+    });
+  </script>
+</body>
+</html>
