@@ -15,19 +15,19 @@ pipeline {
     }
 
     environment {
+        JAVA_HOME = '/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home'
+        PATH = "${JAVA_HOME}/bin:/opt/homebrew/bin:/usr/local/bin:${env.PATH}"
         TELR_HEADLESS = 'true'
     }
 
     stages {
-        stage('Checkout') {
-            steps {
-                checkout scm
-            }
-        }
 
         stage('Verify tools') {
             steps {
+                sh 'echo "JAVA_HOME=$JAVA_HOME"'
+                sh 'which java'
                 sh 'java -version'
+                sh 'which mvn'
                 sh 'mvn -v'
             }
         }
@@ -47,9 +47,8 @@ pipeline {
             }
             steps {
                 script {
-                    // Secret text credentials with these IDs. If they are missing,
-                    // QrOrderFlowTest still runs and skips the Telr card page.
                     def startedE2e = false
+
                     try {
                         withCredentials([
                             string(credentialsId: 'TELR_CARD_NUMBER', variable: 'TELR_CARD_NUMBER'),
@@ -64,6 +63,7 @@ pipeline {
                         if (startedE2e) {
                             throw err
                         }
+
                         echo "Telr credentials not found. Running E2E without card fill."
                         sh 'mvn -B test -Pe2e'
                     }
@@ -74,15 +74,23 @@ pipeline {
 
     post {
         always {
-            junit allowEmptyResults: true, testResults: 'target/surefire-reports/*.xml'
-            archiveArtifacts artifacts: 'reports/extent-report.html', allowEmptyArchive: true
+            junit(
+                allowEmptyResults: true,
+                testResults: 'target/surefire-reports/*.xml'
+            )
+
+            archiveArtifacts(
+                artifacts: 'reports/extent-report.html',
+                allowEmptyArchive: true
+            )
+
             publishHTML([
-                allowMissing         : true,
+                allowMissing: true,
                 alwaysLinkToLastBuild: true,
-                keepAll              : true,
-                reportDir            : 'reports',
-                reportFiles          : 'extent-report.html',
-                reportName           : 'Extent Report'
+                keepAll: true,
+                reportDir: 'reports',
+                reportFiles: 'extent-report.html',
+                reportName: 'Extent Report'
             ])
         }
     }
