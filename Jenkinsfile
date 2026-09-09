@@ -57,43 +57,30 @@ pipeline {
                 expression { params.SUITE in ['sanity', 'customization', 'regression', 'e2e'] }
             }
             steps {
-                script {
-                    // Same Telr cards for both servers. OMS login is per account.
-                    // test  → testdeploychannel  (OMS_*)
-                    // staging → sprint205         (OMS_STAGING_*)
-                    def oms = params.ENV == 'staging' ? [
-                            auth         : 'OMS_STAGING_AUTH_TOKEN',
-                            aa           : 'OMS_STAGING_AA_TOKEN',
-                            switchToken  : 'OMS_STAGING_SWITCH_TOKEN',
-                            switchedUser : 'OMS_STAGING_SWITCHED_USER_TOKEN',
-                            tenant       : 'OMS_STAGING_TENANT_TOKEN',
-                            esSession    : 'OMS_STAGING_ES_SESSION_ID',
-                            counterShift : 'OMS_STAGING_COUNTER_SHIFT_ID'
-                    ] : [
-                            auth         : 'OMS_AUTH_TOKEN',
-                            aa           : 'OMS_AA_TOKEN',
-                            switchToken  : 'OMS_SWITCH_TOKEN',
-                            switchedUser : 'OMS_SWITCHED_USER_TOKEN',
-                            tenant       : 'OMS_TENANT_TOKEN',
-                            esSession    : 'OMS_ES_SESSION_ID',
-                            counterShift : 'OMS_COUNTER_SHIFT_ID'
-                    ]
-
-                    withCredentials([
-                            string(credentialsId: 'TELR_CARD_NUMBER', variable: 'TELR_CARD_NUMBER'),
-                            string(credentialsId: 'TELR_CVV', variable: 'TELR_CVV'),
-                            string(credentialsId: 'TELR_EXP_MONTH', variable: 'TELR_EXP_MONTH'),
-                            string(credentialsId: 'TELR_EXP_YEAR', variable: 'TELR_EXP_YEAR'),
-                            string(credentialsId: oms.auth, variable: 'OMS_AUTH_TOKEN'),
-                            string(credentialsId: oms.aa, variable: 'OMS_AA_TOKEN'),
-                            string(credentialsId: oms.switchToken, variable: 'OMS_SWITCH_TOKEN'),
-                            string(credentialsId: oms.switchedUser, variable: 'OMS_SWITCHED_USER_TOKEN'),
-                            string(credentialsId: oms.tenant, variable: 'OMS_TENANT_TOKEN'),
-                            string(credentialsId: oms.esSession, variable: 'OMS_ES_SESSION_ID'),
-                            string(credentialsId: oms.counterShift, variable: 'OMS_COUNTER_SHIFT_ID')
-                    ]) {
-                        sh "mvn -B test -P${params.SUITE} -Denv=${params.ENV}"
-                    }
+                // Telr cards are Jenkins Secret text. OMS tokens stay on this machine
+                // at $JENKINS_HOME/oms/test.properties and staging.properties — not in Git.
+                withCredentials([
+                        string(credentialsId: 'TELR_CARD_NUMBER', variable: 'TELR_CARD_NUMBER'),
+                        string(credentialsId: 'TELR_CVV', variable: 'TELR_CVV'),
+                        string(credentialsId: 'TELR_EXP_MONTH', variable: 'TELR_EXP_MONTH'),
+                        string(credentialsId: 'TELR_EXP_YEAR', variable: 'TELR_EXP_YEAR')
+                ]) {
+                    sh """
+                        set -e
+                        OMS_SRC="\$JENKINS_HOME/oms/${params.ENV}.properties"
+                        if [ ! -f "\$OMS_SRC" ]; then
+                            echo "Missing OMS file: \$OMS_SRC"
+                            echo "Add testdeploy tokens to \$JENKINS_HOME/oms/test.properties"
+                            echo "Add sprint205 tokens to \$JENKINS_HOME/oms/staging.properties"
+                            exit 1
+                        fi
+                        if [ "${params.ENV}" = "staging" ]; then
+                            cp "\$OMS_SRC" src/test/resources/oms.staging.local.properties
+                        else
+                            cp "\$OMS_SRC" src/test/resources/oms.local.properties
+                        fi
+                        mvn -B test -P${params.SUITE} -Denv=${params.ENV}
+                    """
                 }
             }
         }
@@ -101,6 +88,7 @@ pipeline {
 
     post {
         always {
+            sh 'rm -f src/test/resources/oms.local.properties src/test/resources/oms.staging.local.properties'
             junit(
                 allowEmptyResults: true,
                 testResults: 'target/surefire-reports/*.xml'
