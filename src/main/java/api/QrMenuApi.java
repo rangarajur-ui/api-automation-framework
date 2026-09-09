@@ -16,7 +16,7 @@ public class QrMenuApi {
         request.setSkipItemOptions(skipItemOptions);
         request.setIssueQrScanToken(true);
 
-        return RestAssured
+        return ApiCall.retry(() -> RestAssured
                 .given()
                 .spec(ApiRequestSpec.commonSpec())
                 .header("Referer", ApiRequestSpec.getBaseUrl() + "/qr_menu/?code=" + code)
@@ -25,6 +25,6 @@ public class QrMenuApi {
                 .post("/qr_online_order/" + code)
                 .then()
                 .extract()
-                .response();
+                .response());
     }
 }

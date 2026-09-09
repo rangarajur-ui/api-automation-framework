@@ -11,7 +11,7 @@ import io.restassured.response.Response;
 public class OmsApi {
 
     public Response getOrderDetails(int orderId) {
-        return RestAssured
+        return ApiCall.retry(() -> RestAssured
                 .given()
                 .relaxedHTTPSValidation()
                 .baseUri(ConfigReader.getOmsBaseUrl())
@@ -32,6 +32,6 @@ public class OmsApi {
                 .get("/m/oms/orders/" + orderId + "/details.json")
                 .then()
                 .extract()
-                .response();
+                .response());
     }
 }

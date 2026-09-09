@@ -8,8 +8,7 @@ import pojo.request.ConfirmationCartRequest;
 public class CartApi {
 
     public Response viewCart(String code, String sessionToken, CartRequest request) {
-
-        return RestAssured
+        return ApiCall.retry(() -> RestAssured
                 .given()
                 .spec(ApiRequestSpec.commonSpec())
                 .header("Referer", ApiRequestSpec.getBaseUrl() + "/qr_menu/cart/")
@@ -19,7 +18,7 @@ public class CartApi {
                 .post("/qr_view_cart/" + code)
                 .then()
                 .extract()
-                .response();
+                .response());
     }
 
     /**
@@ -33,7 +32,7 @@ public class CartApi {
             ConfirmationCartRequest request
     ) {
 
-        return RestAssured
+        return ApiCall.retry(() -> RestAssured
                 .given()
                 .spec(ApiRequestSpec.commonSpec())
                 .header("Referer", ApiRequestSpec.getBaseUrl() + "/qr_menu/paybill/?ct=" + ct)
@@ -45,6 +44,6 @@ public class CartApi {
                 .post("/qr_view_cart/" + code + ".json")
                 .then()
                 .extract()
-                .response();
+                .response());
     }
 }

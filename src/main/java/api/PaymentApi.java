@@ -8,7 +8,7 @@ public class PaymentApi {
 
     public Response initiatePayment(String code, String sessionToken, PaymentRequest request) {
 
-        return RestAssured
+        return ApiCall.retry(() -> RestAssured
                 .given()
                 .spec(ApiRequestSpec.commonSpec())
                 .header("Referer", ApiRequestSpec.getBaseUrl() + "/qr_menu/cart/")
@@ -18,7 +18,7 @@ public class PaymentApi {
                 .post("/initiate_payment/" + code)
                 .then()
                 .extract()
-                .response();
+                .response());
     }
 
     /**
@@ -27,7 +27,7 @@ public class PaymentApi {
      */
     public Response fetchPaymentStatus(String code, String sessionToken, String ct) {
 
-        return RestAssured
+        return ApiCall.retry(() -> RestAssured
                 .given()
                 .spec(ApiRequestSpec.commonSpec())
                 .header("Referer", ApiRequestSpec.getBaseUrl() + "/qr_menu/paybill/?ct=" + ct)
@@ -37,6 +37,6 @@ public class PaymentApi {
                 .get("/fetch_payment_status_by_session_id/" + code)
                 .then()
                 .extract()
-                .response();
+                .response());
     }
 }
