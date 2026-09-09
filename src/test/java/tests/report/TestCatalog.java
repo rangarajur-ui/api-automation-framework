@@ -6,7 +6,6 @@ import java.util.Map;
 
 /**
  * Maps each test method to the business story the report should tell.
- * Titles and results describe verified behaviour, not raw API traffic.
  */
 public final class TestCatalog {
 
@@ -78,71 +77,71 @@ public final class TestCatalog {
                     "Negative",
                     "Invalid payment link was rejected."
             )),
-            Map.entry("addSizeCustomizationUpdatesNameAndTotal", new TestInfo(
-                    "Size Customization",
-                    "Validates that a size option updates the product name and cart total.",
-                    "Customization",
-                    "Size customization applied and total validated."
-            )),
-            Map.entry("addAddonCustomizationIncreasesCartTotal", new TestInfo(
-                    "Addon Customization",
-                    "Validates that an add-on increases the cart total.",
-                    "Customization",
-                    "Add-on applied and total validated."
-            )),
-            Map.entry("singleItemCartUsesItem1Total", new TestInfo(
-                    "Single Item Cart",
-                    "Validates cart totals when only the first baseline product is added.",
-                    "Cart",
-                    "Single-item cart total validated."
-            )),
-            Map.entry("increasingItem1QuantityIncreasesTotal", new TestInfo(
-                    "Increase Item Quantity",
-                    "Validates that raising quantity increases the cart total.",
-                    "Cart",
-                    "Quantity change increased the cart total."
-            )),
-            Map.entry("baselineItemsPlusSizeCustomization", new TestInfo(
-                    "Cart With Customization",
-                    "Validates baseline products plus a size customization in one cart.",
-                    "Cart",
-                    "Combined cart totals validated."
-            )),
-            Map.entry("placeOrderWithCustomerDetails", new TestInfo(
-                    "Customer Details",
-                    "Validates that guest name and mobile variants can start payment without changing item totals.",
-                    "Customer",
-                    "Customer details accepted and payment session created."
-            )),
             Map.entry("shortMobileIsRejected", new TestInfo(
                     "Invalid Mobile Number",
                     "Validates that a mobile number below the accepted length is rejected.",
                     "Negative",
                     "Short mobile number was rejected."
             )),
-            Map.entry("itemInstructionIsStoredAsNotes", new TestInfo(
-                    "Item Instruction",
-                    "Validates that an item instruction is stored as notes without changing totals.",
-                    "Instructions",
-                    "Item instruction stored as notes."
+            Map.entry("shouldCreateOrderWithSizeCustomization", new TestInfo(
+                    "Size Customization → Complete Order",
+                    "Validates that a size option is preserved through checkout and final order creation.",
+                    "Cart → Customization → Payment → Order",
+                    "Customized product successfully ordered."
             )),
-            Map.entry("orderLevelCookingDetailsCanInitiatePayment", new TestInfo(
-                    "Order Cooking Details",
-                    "Validates that order-level cooking details are accepted when payment is initiated.",
-                    "Instructions",
-                    "Cooking details accepted and payment session created."
+            Map.entry("shouldCreateOrderWithAddonCustomization", new TestInfo(
+                    "Addon Customization → Complete Order",
+                    "Validates that an add-on is preserved through checkout and final order creation.",
+                    "Cart → Add-on → Payment → Order",
+                    "Add-on product successfully ordered."
             )),
-            Map.entry("menuCartAndInitiatePaymentStayAligned", new TestInfo(
-                    "Menu, Cart And Payment",
-                    "Validates that menu, cart totals, and Telr payment initiation stay aligned.",
-                    "Regression",
-                    "Menu, cart, and payment initiation stayed aligned."
+            Map.entry("shouldCreateOrderWithSingleItem", new TestInfo(
+                    "Single Item → Complete Order",
+                    "Validates that a single-item cart can be paid and accepted.",
+                    "Cart → Payment → Order",
+                    "Single-item order created and accepted."
             )),
-            Map.entry("verifyQrMenuCartAndInitiatePayment", new TestInfo(
+            Map.entry("shouldCreateOrderAfterIncreasingQuantity", new TestInfo(
+                    "Increase Quantity → Complete Order",
+                    "Validates that a quantity change is paid and persisted on the accepted order.",
+                    "Cart → Quantity → Payment → Order",
+                    "Quantity change was paid and persisted on the order."
+            )),
+            Map.entry("shouldCreateOrderWithBaselineAndSizeCustomization", new TestInfo(
+                    "Cart With Customization → Complete Order",
+                    "Validates baseline products plus a size customization through payment and order creation.",
+                    "Cart → Customization → Payment → Order",
+                    "Combined cart was paid and accepted."
+            )),
+            Map.entry("shouldCreateOrderWithCustomerDetails", new TestInfo(
+                    "Customer Details → Complete Order",
+                    "Validates that guest details can complete Telr payment and create an accepted order.",
+                    "Customer → Cart → Payment → Order",
+                    "Customer details accepted and order was created and accepted."
+            )),
+            Map.entry("shouldCreateOrderWithItemInstruction", new TestInfo(
+                    "Item Instruction → Complete Order",
+                    "Validates that an item instruction is preserved through checkout and final order creation.",
+                    "Cart → Instruction → Customer → Payment → Order",
+                    "Instruction successfully persisted through checkout and order creation."
+            )),
+            Map.entry("shouldCreateOrderWithCookingDetails", new TestInfo(
+                    "Cooking Details → Complete Order",
+                    "Validates that cooking details are sent through Telr payment and the order is accepted.",
+                    "Cart → Cooking details → Payment → Order",
+                    "Cooking details accepted and order was created and accepted."
+            )),
+            Map.entry("shouldCreateOrderFromMenuCartAndPayment", new TestInfo(
+                    "Menu, Cart And Payment → Complete Order",
+                    "Validates menu, cart, Telr payment, and an accepted order stay aligned.",
+                    "Menu → Cart → Telr Payment → Order",
+                    "Payment completed successfully and order was created and accepted."
+            )),
+            Map.entry("shouldCreateAcceptedOrderAfterTelrPayment", new TestInfo(
                     "Complete Payment & Create Order",
-                    "Validates the dine-in flow from menu and cart through Telr payment and order acceptance.",
-                    "E2E Order",
-                    "Payment completed successfully and order was accepted."
+                    "Validates the dine-in journey from menu through Telr payment to an accepted order.",
+                    "Menu → Cart → Customer → Telr Payment → Order",
+                    "Payment completed successfully and order was created and accepted."
             ))
     );
 

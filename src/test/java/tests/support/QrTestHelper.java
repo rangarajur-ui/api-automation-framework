@@ -35,6 +35,31 @@ public class QrTestHelper {
         return token;
     }
 
+    /**
+     * Always opens a new QR session. Checkout tests must not share a cached token.
+     */
+    public static String freshSessionToken() {
+        Response menuResponse = null;
+        for (int attempt = 1; attempt <= 5; attempt++) {
+            menuResponse = new QrMenuApi().getQrMenuDetails(TestDataReader.getQrCode(), true);
+            if (menuResponse.statusCode() != 429) {
+                break;
+            }
+            try {
+                Thread.sleep(3000L * attempt);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+        Assert.assertEquals(menuResponse.statusCode(), 200, "QR Menu API should return HTTP 200");
+        QrMenuResponse menu = menuResponse.as(QrMenuResponse.class);
+        String token = menu.getData().getToken();
+        Assert.assertNotNull(token, "QR Menu should return a session token");
+        Assert.assertFalse(token.isBlank(), "Session token should not be blank");
+        return token;
+    }
+
     private static Response fetchMenu(boolean skipItemOptions, Response existing) {
         long now = System.currentTimeMillis();
         if (existing != null && now - cachedAtMillis < 120_000L && existing.statusCode() == 200) {

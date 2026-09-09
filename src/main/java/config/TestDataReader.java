@@ -3,12 +3,14 @@ package config;
 import java.util.Properties;
 
 /**
- * Reads static QR-order scenario values from testdata.properties.
+ * Reads static QR-order scenario values for the active environment.
+ * Default is testdata.properties (test). Staging is testdata-staging.properties.
  * Dynamic values (session token, payment/order IDs) must come from API responses.
  */
 public class TestDataReader {
 
-    private static final Properties DATA = ConfigReader.load("testdata.properties");
+    private static final String DATA_FILE = ConfigReader.testdataFileName();
+    private static final Properties DATA = ConfigReader.load(DATA_FILE);
 
     public static String getQrCode() {
         return required("qr.code");
@@ -112,6 +114,18 @@ public class TestDataReader {
 
     public static String getExpectedAfterOrderStatus() {
         return required("expected.after.order.status");
+    }
+
+    public static String getExpectedOmsPaymentStatus() {
+        return required("expected.oms.payment.status");
+    }
+
+    public static String getExpectedOmsPaymentMethod() {
+        return required("expected.oms.payment.method");
+    }
+
+    public static String getExpectedOmsOrderType() {
+        return required("expected.oms.order.type");
     }
 
     public static String getCustomItemId() {
@@ -224,7 +238,7 @@ public class TestDataReader {
     private static String required(String key) {
         String value = DATA.getProperty(key);
         if (value == null || value.isBlank()) {
-            throw new IllegalStateException("Missing key in testdata.properties: " + key);
+            throw new IllegalStateException("Missing key in " + DATA_FILE + ": " + key);
         }
         return value.trim();
     }

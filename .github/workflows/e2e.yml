@@ -1,8 +1,7 @@
 name: E2E
 
 # Nightly plus manual run. Needs Chrome. Card values come from GitHub secrets,
-# not from the repo. If secrets are missing, QrOrderFlowTest still passes
-# after initiate_payment and skips Telr.
+# not from the repo. Missing secrets fail the checkout tests.
 on:
   workflow_dispatch:
   schedule:

@@ -8,18 +8,20 @@ import pojo.request.CartRequest;
 import pojo.response.CartResponse;
 import pojo.response.OrderItem;
 import tests.report.TestReporter;
+import tests.support.CheckoutFlow;
+import tests.support.CheckoutResult;
+import tests.support.CheckoutStats;
 import tests.support.QrTestHelper;
 
 /**
- * Extra cart cases on the happy-flow APIs. No Telr.
- * This menu has no combo items, so combo is not added.
+ * Cart variants that represent a real order, completed through Telr.
  */
 public class CartVariantTests {
 
-    @Test(groups = {"sanity", "regression"},
-            description = "Validates cart totals when only the first baseline product is added.")
-    public void singleItemCartUsesItem1Total() {
-        String token = QrTestHelper.newSessionToken();
+    @Test(groups = {"sanity", "regression", "checkout"},
+            description = "Validates a single-item cart is paid and accepted as an order.")
+    public void shouldCreateOrderWithSingleItem() {
+        String token = QrTestHelper.freshSessionToken();
         CartRequest cartRequest = QrTestHelper.guestCart();
         cartRequest.addItem(
                 TestDataReader.getItem1Id(),
@@ -31,12 +33,15 @@ public class CartVariantTests {
         CartResponse cart = response.as(CartResponse.class);
         OrderItem item = cart.getData().getOrderItems().get(0);
 
+        TestReporter.section("BUSINESS FLOW");
+        TestReporter.data("Flow", "Single product → Cart → Payment → Order");
         TestReporter.data("Product ID", item.getItemObjectId());
-        TestReporter.data("Product Name", item.getName());
+        TestReporter.data("Product Name", TestReporter.displayItemName(item.getName()));
         TestReporter.data("Quantity", TestReporter.formatQuantity(item.getQuantity()));
+        TestReporter.section("CART");
         TestReporter.logCartSummary(cart, response.statusCode());
 
-        TestReporter.assertEquals("HTTP status validation", response.statusCode(), 200);
+        TestReporter.assertEquals("Cart created", response.statusCode(), 200);
         TestReporter.assertEquals("Expected item count", cart.getData().getOrderItems().size(), 1);
         TestReporter.assertEquals(
                 "Product ID",
@@ -49,13 +54,18 @@ public class CartVariantTests {
                 TestDataReader.getItem1OnlyExpectedTotal(),
                 0.01
         );
-        TestReporter.result("Single-item cart total validated.");
+
+        CheckoutResult checkout = CheckoutFlow.payAndConfirm(token, QrTestHelper.paymentFromCart(cartRequest));
+        CheckoutFlow.assertOrderMatchesCart(cart, checkout.confirmation());
+        TestReporter.logOrderItems(checkout.confirmation().getData().getOrderItems());
+        TestReporter.logTotals(checkout.confirmation().getData().getOrderItemsTotal());
+        TestReporter.result("Single-item order created and accepted.");
     }
 
-    @Test(groups = {"sanity", "regression"},
-            description = "Validates that raising quantity increases the cart total.")
-    public void increasingItem1QuantityIncreasesTotal() {
-        String token = QrTestHelper.newSessionToken();
+    @Test(groups = {"sanity", "regression", "checkout"},
+            description = "Validates that raising quantity is paid and appears on the accepted order.")
+    public void shouldCreateOrderAfterIncreasingQuantity() {
+        String token = QrTestHelper.freshSessionToken();
 
         CartRequest qtyTwo = QrTestHelper.guestCart();
         qtyTwo.addItem(
@@ -78,14 +88,17 @@ public class CartVariantTests {
         OrderItem item = second.getData().getOrderItems().get(0);
         double secondTotal = second.getData().getOrderItemsTotal().getTotalAmount();
 
+        TestReporter.section("BUSINESS FLOW");
+        TestReporter.data("Flow", "Increase quantity → Cart → Payment → Order");
         TestReporter.data("Product ID", item.getItemObjectId());
-        TestReporter.data("Product Name", item.getName());
+        TestReporter.data("Product Name", TestReporter.displayItemName(item.getName()));
         TestReporter.data("Quantity", TestReporter.formatQuantity(item.getQuantity()));
         TestReporter.money("Previous Total", firstTotal);
+        TestReporter.section("CART");
         TestReporter.logCartSummary(second, secondResponse.statusCode());
 
-        TestReporter.assertEquals("HTTP status validation", firstResponse.statusCode(), 200);
-        TestReporter.assertEquals("HTTP status validation", secondResponse.statusCode(), 200);
+        TestReporter.assertEquals("Cart created", firstResponse.statusCode(), 200);
+        TestReporter.assertEquals("Updated cart created", secondResponse.statusCode(), 200);
         TestReporter.assertEquals(
                 "Quantity 2 cart total",
                 firstTotal,
@@ -108,13 +121,25 @@ public class CartVariantTests {
                 "Raising quantity increases cart total",
                 secondTotal > firstTotal
         );
-        TestReporter.result("Quantity change increased the cart total.");
+
+        CheckoutResult checkout = CheckoutFlow.payAndConfirm(token, QrTestHelper.paymentFromCart(qtyThree));
+        CheckoutFlow.assertOrderMatchesCart(second, checkout.confirmation());
+        OrderItem paid = checkout.findItemByName(item.getName());
+        TestReporter.assertEqualsRaw(
+                "Final quantity",
+                paid == null ? 0 : paid.getQuantity(),
+                TestDataReader.getItem1Qty3(),
+                0.0
+        );
+        TestReporter.logOrderItems(checkout.confirmation().getData().getOrderItems());
+        TestReporter.logTotals(checkout.confirmation().getData().getOrderItemsTotal());
+        TestReporter.result("Quantity change was paid and persisted on the order.");
     }
 
-    @Test(groups = {"sanity", "regression"},
-            description = "Validates baseline products plus a size customization in one cart.")
-    public void baselineItemsPlusSizeCustomization() {
-        String token = QrTestHelper.newSessionToken();
+    @Test(groups = {"sanity", "regression", "checkout"},
+            description = "Validates baseline products plus a size customization are paid and accepted.")
+    public void shouldCreateOrderWithBaselineAndSizeCustomization() {
+        String token = QrTestHelper.freshSessionToken();
         CartRequest cartRequest = QrTestHelper.baselineCart();
         cartRequest.addCustomizedItem(
                 TestDataReader.getCustomItemId(),
@@ -128,10 +153,13 @@ public class CartVariantTests {
         Response response = viewCart(token, cartRequest);
         CartResponse cart = response.as(CartResponse.class);
 
+        TestReporter.section("BUSINESS FLOW");
+        TestReporter.data("Flow", "Baseline products → Size customization → Payment → Order");
+        TestReporter.section("CART");
         TestReporter.logCartSummary(cart, response.statusCode());
         TestReporter.logOrderItems(cart.getData().getOrderItems());
 
-        TestReporter.assertEquals("HTTP status validation", response.statusCode(), 200);
+        TestReporter.assertEquals("Cart created", response.statusCode(), 200);
         TestReporter.assertEquals("Expected item count", cart.getData().getOrderItems().size(), 3);
         TestReporter.assertEquals(
                 "Cart total",
@@ -155,7 +183,14 @@ public class CartVariantTests {
                 TestDataReader.getCustomExpectedTotal(),
                 0.01
         );
-        TestReporter.result("Combined cart totals validated.");
+
+        CheckoutResult checkout = CheckoutFlow.payAndConfirm(token, QrTestHelper.paymentFromCart(cartRequest));
+        CheckoutFlow.assertOrderMatchesCart(cart, checkout.confirmation());
+        OrderItem paidJuice = checkout.findItemContaining(TestDataReader.getCustomExpectedNameContains());
+        TestReporter.assertNotNull("Customization persisted in final order", paidJuice);
+        CheckoutStats.customizationOrder();
+        TestReporter.logTotals(checkout.confirmation().getData().getOrderItemsTotal());
+        TestReporter.result("Combined cart was paid and accepted.");
     }
 
     private Response viewCart(String token, CartRequest cartRequest) {

@@ -1,7 +1,6 @@
 package tests;
 
 import api.CartApi;
-import api.PaymentApi;
 import config.TestDataReader;
 import io.restassured.response.Response;
 import org.testng.annotations.DataProvider;
@@ -9,14 +8,14 @@ import org.testng.annotations.Test;
 import pojo.request.CartRequest;
 import pojo.request.PaymentRequest;
 import pojo.response.CartResponse;
-import pojo.response.PaymentResponse;
 import tests.report.TestReporter;
+import tests.support.CheckoutFlow;
+import tests.support.CheckoutResult;
 import tests.support.QrTestHelper;
 
 /**
- * Same baseline items, different guest name / country code / mobile.
- * One method, three rows — TestNG runs them as separate results.
- * Stops at initiate_payment (no Telr). Cart does not echo the name back.
+ * Guest name / country / mobile variants must complete payment and create an order.
+ * Cart does not echo the guest name; only assert it on the final order if the API returns it.
  */
 public class CustomerDetailsTests {
 
@@ -25,47 +24,44 @@ public class CustomerDetailsTests {
         return TestDataReader.customerVariants();
     }
 
-    @Test(dataProvider = "customers", groups = {"sanity", "regression"},
-            description = "Validates that guest name and mobile variants can start payment without changing item totals.")
-    public void placeOrderWithCustomerDetails(String name, String countryCode, String mobile) {
-        String token = QrTestHelper.newSessionToken();
+    @Test(dataProvider = "customers", groups = {"sanity", "regression", "checkout"},
+            description = "Validates that guest details can complete Telr payment and create an accepted order.")
+    public void shouldCreateOrderWithCustomerDetails(String name, String countryCode, String mobile) {
+        String token = QrTestHelper.freshSessionToken();
         CartRequest cartRequest = QrTestHelper.baselineCartFor(name, countryCode, mobile);
 
         Response cartHttpResponse =
                 new CartApi().viewCart(TestDataReader.getQrCode(), token, cartRequest);
         CartResponse cart = cartHttpResponse.as(CartResponse.class);
 
-        PaymentRequest paymentRequest = QrTestHelper.paymentFromCart(cartRequest);
-        paymentRequest.setUserMobileNumber(QrTestHelper.paymentMobile(countryCode, mobile));
-
-        Response paymentHttpResponse = new PaymentApi().initiatePayment(
-                TestDataReader.getQrCode(),
-                token,
-                paymentRequest
-        );
-        PaymentResponse payment = paymentHttpResponse.as(PaymentResponse.class);
-
+        TestReporter.section("BUSINESS FLOW");
+        TestReporter.data("Flow", "Customer details → Cart → Payment → Order");
         TestReporter.data("Customer Name", name);
         TestReporter.data("Country Code", countryCode);
         TestReporter.data("Mobile", TestReporter.maskedMobile(mobile));
+        TestReporter.section("CART");
         TestReporter.logCartSummary(cart, cartHttpResponse.statusCode());
-        TestReporter.data("Payment HTTP Status", paymentHttpResponse.statusCode());
-        TestReporter.data("Payment Success", payment.getData().isSuccess());
-        if (payment.getData().getOrderId() != null) {
-            TestReporter.data("Order ID", payment.getData().getOrderId());
-        }
 
-        TestReporter.assertEquals("HTTP status validation", cartHttpResponse.statusCode(), 200);
+        TestReporter.assertEquals("Cart created", cartHttpResponse.statusCode(), 200);
         TestReporter.assertEquals(
                 "Cart total unchanged by customer details",
                 cart.getData().getOrderItemsTotal().getTotalAmount(),
                 TestDataReader.getExpectedTotalAmount(),
                 0.01
         );
-        TestReporter.assertEquals("Initiate payment HTTP status", paymentHttpResponse.statusCode(), 200);
-        TestReporter.assertTrue("Payment session created", payment.getData().isSuccess());
-        TestReporter.assertNotNull("Order ID generated", payment.getData().getOrderId());
-        TestReporter.result("Customer details accepted and payment session created.");
+
+        PaymentRequest paymentRequest = QrTestHelper.paymentFromCart(cartRequest);
+        paymentRequest.setUserName(name);
+        paymentRequest.setUserCountryCode(countryCode);
+        paymentRequest.setUserMobileNumber(QrTestHelper.paymentMobile(countryCode, mobile));
+
+        CheckoutResult checkout = CheckoutFlow.payAndConfirm(token, paymentRequest);
+        CheckoutFlow.assertOrderMatchesCart(cart, checkout.confirmation());
+        CheckoutFlow.assertOmsCustomer(checkout, name);
+
+        TestReporter.logOrderItems(checkout.confirmation().getData().getOrderItems());
+        TestReporter.logTotals(checkout.confirmation().getData().getOrderItemsTotal());
+        TestReporter.result("Customer details accepted and order was created and accepted.");
     }
 
     @Test(groups = {"negative", "regression"},

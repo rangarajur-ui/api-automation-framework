@@ -24,6 +24,9 @@ public class PaymentStatusData {
     @JsonProperty("table_preference_value")
     private Integer tablePreferenceValue;
 
+    @JsonProperty("cooking_details")
+    private String cookingDetails;
+
     public boolean isTerminalStatus() {
         return terminalStatus;
     }
@@ -70,5 +73,13 @@ public class PaymentStatusData {
 
     public void setTablePreferenceValue(Integer tablePreferenceValue) {
         this.tablePreferenceValue = tablePreferenceValue;
+    }
+
+    public String getCookingDetails() {
+        return cookingDetails;
+    }
+
+    public void setCookingDetails(String cookingDetails) {
+        this.cookingDetails = cookingDetails;
     }
 }

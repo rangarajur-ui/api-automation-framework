@@ -9,10 +9,15 @@ import config.ConfigReader;
 import config.TestDataReader;
 import org.testng.ISuite;
 import org.testng.ISuiteListener;
+import org.testng.ISuiteResult;
+import org.testng.ITestContext;
 import org.testng.ITestListener;
 import org.testng.ITestResult;
+import tests.support.CheckoutStats;
 
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Writes a self-contained reports/extent-report.html after each suite.
@@ -25,6 +30,7 @@ public class ExtentReportListener implements ITestListener, ISuiteListener {
 
     @Override
     public void onStart(ISuite suite) {
+        CheckoutStats.reset();
         Path report = Path.of("reports", "extent-report.html");
         ExtentSparkReporter spark = new ExtentSparkReporter(report.toString());
         spark.config().setDocumentTitle("QR API Automation");
@@ -39,6 +45,7 @@ public class ExtentReportListener implements ITestListener, ISuiteListener {
         extent.attachReporter(spark);
         extent.setSystemInfo("Tester Name", ConfigReader.getReportTesterName());
         extent.setSystemInfo("Environment", ConfigReader.getReportEnvironment());
+        extent.setSystemInfo("Active env", ConfigReader.getActiveEnvironment());
         extent.setSystemInfo("Base URL", ConfigReader.getBaseUrl());
         extent.setSystemInfo("Frontend build", ConfigReader.getFrontendBuildVersion());
         extent.setSystemInfo("QR code", TestDataReader.getQrCode());
@@ -51,9 +58,67 @@ public class ExtentReportListener implements ITestListener, ISuiteListener {
 
     @Override
     public void onFinish(ISuite suite) {
+        printExecutionSummary(suite);
         if (extent != null) {
             extent.flush();
         }
+    }
+
+    private static void printExecutionSummary(ISuite suite) {
+        int passed = 0;
+        int failed = 0;
+        int skipped = 0;
+        List<String> failedTests = new ArrayList<>();
+        for (ISuiteResult suiteResult : suite.getResults().values()) {
+            ITestContext context = suiteResult.getTestContext();
+            passed += context.getPassedTests().size();
+            failed += context.getFailedTests().size();
+            skipped += context.getSkippedTests().size();
+            for (ITestResult result : context.getFailedTests().getAllResults()) {
+                String reason = result.getThrowable() == null
+                        ? "failed"
+                        : firstLine(result.getThrowable().getMessage());
+                failedTests.add(result.getMethod().getMethodName() + " : " + reason);
+            }
+        }
+        int total = passed + failed + skipped;
+
+        System.out.println("==================================================");
+        System.out.println("TEST EXECUTION SUMMARY");
+        System.out.println("==================================================");
+        System.out.println();
+        System.out.println("Total Tests       : " + total);
+        System.out.println("Passed            : " + passed);
+        System.out.println("Failed            : " + failed);
+        System.out.println("Skipped           : " + skipped);
+        System.out.println();
+        System.out.println("Orders Created    : " + CheckoutStats.ordersCreated());
+        System.out.println("Payments Success  : " + CheckoutStats.paymentsSuccess());
+        System.out.println("Payments Failed   : " + CheckoutStats.paymentsFailed());
+        System.out.println();
+        System.out.println("Business Flows:");
+        System.out.println("Payment Completion      : " + CheckoutStats.paymentsSuccess());
+        System.out.println("Order Creation          : " + CheckoutStats.ordersCreated());
+        System.out.println("Customization Orders    : " + CheckoutStats.customizationOrders());
+        System.out.println("Instruction Orders      : " + CheckoutStats.instructionOrders());
+        System.out.println("Cooking Detail Orders   : " + CheckoutStats.cookingOrders());
+        if (!failedTests.isEmpty()) {
+            System.out.println();
+            System.out.println("FAILED TESTS");
+            for (String line : failedTests) {
+                System.out.println("- " + line);
+            }
+        }
+        System.out.println();
+        System.out.println("==================================================");
+    }
+
+    private static String firstLine(String message) {
+        if (message == null || message.isBlank()) {
+            return "failed";
+        }
+        int newline = message.indexOf('\n');
+        return newline < 0 ? message : message.substring(0, newline);
     }
 
     @Override

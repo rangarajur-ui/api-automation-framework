@@ -1,5 +1,5 @@
 <!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
-<suite name="Customization Suite">
+<suite name="Customization Suite" parallel="false">
     <listeners>
         <listener class-name="tests.report.ExtentReportListener"/>
     </listeners>

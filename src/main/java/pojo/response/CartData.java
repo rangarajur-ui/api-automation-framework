@@ -23,6 +23,12 @@ public class CartData {
     @JsonProperty("payment_provider_name")
     private String paymentProviderName;
 
+    @JsonProperty("cooking_details")
+    private String cookingDetails;
+
+    @JsonProperty("user_name")
+    private String userName;
+
     public OrderItemsTotal getOrderItemsTotal() {
         return orderItemsTotal;
     }
@@ -71,5 +77,21 @@ public class CartData {
 
     public void setPaymentProviderName(String paymentProviderName) {
         this.paymentProviderName = paymentProviderName;
+    }
+
+    public String getCookingDetails() {
+        return cookingDetails;
+    }
+
+    public void setCookingDetails(String cookingDetails) {
+        this.cookingDetails = cookingDetails;
+    }
+
+    public String getUserName() {
+        return userName;
+    }
+
+    public void setUserName(String userName) {
+        this.userName = userName;
     }
 }

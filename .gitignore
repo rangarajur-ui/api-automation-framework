@@ -42,6 +42,12 @@ build/
 telr.local.properties
 src/test/resources/telr.local.properties
 
+### Local OMS back-office session tokens. Never commit these files. ###
+oms.local.properties
+src/test/resources/oms.local.properties
+oms.*.local.properties
+src/test/resources/oms.*.local.properties
+
 ### Reports ###
 reports/
 test-output/

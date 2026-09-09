@@ -33,13 +33,12 @@ public class TelrHostedPage {
             driver.get(paymentUrl);
             WebDriverWait wait = new WebDriverWait(driver, PAGE_TIMEOUT);
 
-            if (TelrCardDetails.isConfigured()) {
-                fillCardAndSubmit(driver);
-            } else {
-                System.out.println(
-                        "Telr hosted payment is waiting for a test card to be entered in the browser."
+            if (!TelrCardDetails.isConfigured()) {
+                throw new IllegalStateException(
+                        "Telr test credentials are missing. Checkout tests cannot skip payment."
                 );
             }
+            fillCardAndSubmit(driver);
 
             wait.until(webDriver -> {
                 String currentUrl = webDriver.getCurrentUrl();

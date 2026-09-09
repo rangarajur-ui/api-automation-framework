@@ -1,7 +1,6 @@
 package tests;
 
 import api.CartApi;
-import api.PaymentApi;
 import config.TestDataReader;
 import io.restassured.response.Response;
 import org.testng.annotations.Test;
@@ -9,20 +8,21 @@ import pojo.request.CartRequest;
 import pojo.request.PaymentRequest;
 import pojo.response.CartResponse;
 import pojo.response.OrderItem;
-import pojo.response.PaymentResponse;
 import tests.report.TestReporter;
+import tests.support.CheckoutFlow;
+import tests.support.CheckoutResult;
+import tests.support.CheckoutStats;
 import tests.support.QrTestHelper;
 
 /**
- * Item-level instruction (order_items item_instruction) and order-level
- * cooking_details from the captured curls. Baseline items stay 10667 + 10668.
+ * Item-level instruction and order-level cooking details must survive checkout.
  */
 public class InstructionTests {
 
-    @Test(groups = {"sanity", "regression"},
-            description = "Validates that an item instruction is stored as notes without changing totals.")
-    public void itemInstructionIsStoredAsNotes() {
-        String token = QrTestHelper.newSessionToken();
+    @Test(groups = {"sanity", "regression", "checkout"},
+            description = "Validates that an item instruction is preserved through payment and the final order.")
+    public void shouldCreateOrderWithItemInstruction() {
+        String token = QrTestHelper.freshSessionToken();
         CartRequest cartRequest = cartWithItemInstruction();
 
         Response cartHttpResponse =
@@ -31,12 +31,17 @@ public class InstructionTests {
         OrderItem first = cart.getData().getOrderItems().get(0);
         OrderItem second = cart.getData().getOrderItems().get(1);
 
-        TestReporter.data("Item Notes", first.getNotes());
+        TestReporter.section("BUSINESS FLOW");
+        TestReporter.data("Flow", "Cart → Instruction → Customer → Payment → Order");
+        TestReporter.section("ITEM NOTES");
+        TestReporter.data("Item", TestReporter.displayItemName(first.getName()));
+        TestReporter.data("Item-level notes", first.getNotes());
+        TestReporter.section("CART");
         TestReporter.logCartSummary(cart, cartHttpResponse.statusCode());
 
-        TestReporter.assertEquals("HTTP status validation", cartHttpResponse.statusCode(), 200);
+        TestReporter.assertEquals("Cart created", cartHttpResponse.statusCode(), 200);
         TestReporter.assertEquals(
-                "Item instruction stored as notes",
+                "Instruction stored",
                 first.getNotes(),
                 TestDataReader.getItemInstruction()
         );
@@ -50,36 +55,87 @@ public class InstructionTests {
                 TestDataReader.getExpectedTotalAmount(),
                 0.01
         );
-        TestReporter.result("Item instruction stored as notes.");
+
+        PaymentRequest paymentRequest = QrTestHelper.paymentFromCart(cartRequest);
+        CheckoutResult checkout = CheckoutFlow.payAndConfirm(token, paymentRequest);
+        CheckoutFlow.assertOrderMatchesCart(cart, checkout.confirmation());
+
+        OrderItem paidFirst = checkout.findItemByName(first.getName());
+        TestReporter.assertNotNull("Final order contains instructed item", paidFirst);
+        TestReporter.assertEquals(
+                "Instruction persisted to final order",
+                paidFirst == null ? null : paidFirst.getNotes(),
+                TestDataReader.getItemInstruction()
+        );
+        CheckoutFlow.assertOmsItemNotes(
+                checkout,
+                TestReporter.displayItemName(first.getName()),
+                TestDataReader.getItemInstruction()
+        );
+        CheckoutFlow.assertOmsItemHasNoNotes(
+                checkout,
+                TestReporter.displayItemName(second.getName())
+        );
+        CheckoutStats.instructionOrder();
+        TestReporter.logOrderItems(checkout.confirmation().getData().getOrderItems());
+        TestReporter.logTotals(checkout.confirmation().getData().getOrderItemsTotal());
+        TestReporter.result(
+                "Instruction successfully persisted through checkout and order creation."
+        );
     }
 
-    @Test(groups = {"sanity", "regression"},
-            description = "Validates that order-level cooking details are accepted when payment is initiated.")
-    public void orderLevelCookingDetailsCanInitiatePayment() {
-        String token = QrTestHelper.newSessionToken();
-        CartRequest cartRequest = cartWithItemInstruction();
+    @Test(groups = {"sanity", "regression", "checkout"},
+            description = "Validates that cooking details are sent through Telr payment and the order is accepted.")
+    public void shouldCreateOrderWithCookingDetails() {
+        String token = QrTestHelper.freshSessionToken();
+        CartRequest cartRequest = QrTestHelper.baselineCart();
+
+        Response cartHttpResponse =
+                new CartApi().viewCart(TestDataReader.getQrCode(), token, cartRequest);
+        CartResponse cart = cartHttpResponse.as(CartResponse.class);
+
+        TestReporter.section("BUSINESS FLOW");
+        TestReporter.data("Flow", "Cart → Cooking details → Customer → Payment → Order");
+        TestReporter.section("CART");
+        TestReporter.logCartSummary(cart, cartHttpResponse.statusCode());
+        TestReporter.data("Cooking Details Sent", TestDataReader.getOrderInstruction());
+
+        TestReporter.assertEquals("Cart created", cartHttpResponse.statusCode(), 200);
+        TestReporter.assertEquals(
+                "Cart total",
+                cart.getData().getOrderItemsTotal().getTotalAmount(),
+                TestDataReader.getExpectedTotalAmount(),
+                0.01
+        );
 
         PaymentRequest paymentRequest = QrTestHelper.paymentFromCart(cartRequest);
         paymentRequest.setCookingDetails(TestDataReader.getOrderInstruction());
 
-        Response paymentHttpResponse = new PaymentApi().initiatePayment(
-                TestDataReader.getQrCode(),
-                token,
-                paymentRequest
+        CheckoutResult checkout = CheckoutFlow.payAndConfirm(token, paymentRequest);
+        CheckoutFlow.assertOrderMatchesCart(cart, checkout.confirmation());
+
+        String persisted = checkout.findPersistedText(TestDataReader.getOrderInstruction());
+        TestReporter.data(
+                "Cooking Details In Order",
+                persisted == null
+                        ? "not returned by confirmation or OMS details APIs"
+                        : persisted
         );
-        PaymentResponse payment = paymentHttpResponse.as(PaymentResponse.class);
-
-        TestReporter.data("Cooking Details Sent", TestDataReader.getOrderInstruction());
-        TestReporter.data("HTTP Status", paymentHttpResponse.statusCode());
-        TestReporter.data("Payment Success", payment.getData().isSuccess());
-        if (payment.getData().getOrderId() != null) {
-            TestReporter.data("Order ID", payment.getData().getOrderId());
+        if (persisted != null) {
+            TestReporter.assertContains(
+                    "Cooking details persisted to final order",
+                    persisted,
+                    TestDataReader.getOrderInstruction()
+            );
         }
-
-        TestReporter.assertEquals("HTTP status validation", paymentHttpResponse.statusCode(), 200);
-        TestReporter.assertTrue("Payment session accepts cooking details", payment.getData().isSuccess());
-        TestReporter.assertNotNull("Order ID generated", payment.getData().getOrderId());
-        TestReporter.result("Cooking details accepted and payment session created.");
+        CheckoutStats.cookingOrder();
+        TestReporter.logOrderItems(checkout.confirmation().getData().getOrderItems());
+        TestReporter.logTotals(checkout.confirmation().getData().getOrderItemsTotal());
+        TestReporter.result(
+                persisted == null
+                        ? "Cooking details were sent and the OMS order was accepted. OMS details does not echo cooking_details."
+                        : "Cooking details accepted and order was created and accepted."
+        );
     }
 
     private CartRequest cartWithItemInstruction() {
