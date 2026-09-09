@@ -6,8 +6,6 @@ import api.QrMenuApi;
 import config.TelrCardDetails;
 import config.TestDataReader;
 import io.restassured.response.Response;
-import org.testng.Assert;
-import org.testng.Reporter;
 import org.testng.annotations.Test;
 import pojo.request.CartRequest;
 import pojo.request.ConfirmationCartRequest;
@@ -19,13 +17,13 @@ import pojo.response.OrderItemsTotal;
 import pojo.response.PaymentResponse;
 import pojo.response.PaymentStatusResponse;
 import pojo.response.QrMenuResponse;
+import tests.report.TestReporter;
 import ui.TelrHostedPage;
 import utils.PaymentReturnUrl;
-import utils.TokenMasker;
 
 public class QrOrderFlowTest {
 
-    @Test
+    @Test(description = "Validates the dine-in flow from menu and cart through Telr payment and order acceptance.")
     public void verifyQrMenuCartAndInitiatePayment() {
 
         String code = TestDataReader.getQrCode();
@@ -34,54 +32,24 @@ public class QrOrderFlowTest {
         CartApi cartApi = new CartApi();
         PaymentApi paymentApi = new PaymentApi();
 
-        // ==========================================
-        // Step 1: Get menu details and session token
-        // ==========================================
+        Response menuResponse = qrMenuApi.getQrMenuDetails(code);
+        QrMenuResponse menu = menuResponse.as(QrMenuResponse.class);
 
-        Response menuResponse =
-                qrMenuApi.getQrMenuDetails(code);
+        int accountId = menu.getData().getAccount().getId();
+        String accountName = menu.getData().getAccount().getName();
+        String sessionToken = menu.getData().getToken();
 
-        Assert.assertEquals(
-                menuResponse.statusCode(),
-                200,
-                "QR Menu API should return HTTP 200"
-        );
+        TestReporter.logAccount(accountId, accountName);
+        TestReporter.data("Menu HTTP Status", menuResponse.statusCode());
+        TestReporter.data("Session Token", sessionToken == null || sessionToken.isBlank() ? "missing" : "present");
 
-        QrMenuResponse menu =
-                menuResponse.as(QrMenuResponse.class);
-
-        int accountId =
-                menu.getData().getAccount().getId();
-
-        String accountName =
-                menu.getData().getAccount().getName();
-
-        String sessionToken =
-                menu.getData().getToken();
-
-        System.out.println("Account ID   : " + accountId);
-        System.out.println("Account Name : " + accountName);
-        System.out.println("Token        : " + TokenMasker.mask(sessionToken));
-
-        Assert.assertEquals(
-                accountId,
-                TestDataReader.getExpectedAccountId(),
-                "QR Menu should return the expected account ID"
-        );
-        Assert.assertEquals(
-                accountName,
-                TestDataReader.getExpectedAccountName(),
-                "QR Menu should return the expected account name"
-        );
-        Assert.assertNotNull(sessionToken, "QR Menu should return a session token");
-        Assert.assertFalse(sessionToken.isBlank(), "Session token should not be blank");
-
-        // ==========================================
-        // Step 2: Add items / view cart
-        // ==========================================
+        TestReporter.assertEquals("HTTP status validation", menuResponse.statusCode(), 200);
+        TestReporter.assertEquals("Account is valid", accountId, TestDataReader.getExpectedAccountId());
+        TestReporter.assertEquals("Account name", accountName, TestDataReader.getExpectedAccountName());
+        TestReporter.assertNotNull("Session token is present", sessionToken);
+        TestReporter.assertTrue("Session token is not blank", sessionToken != null && !sessionToken.isBlank());
 
         CartRequest cartRequest = new CartRequest();
-
         cartRequest.setCode(code);
         cartRequest.setOrderSource(TestDataReader.getOrderSource());
         cartRequest.setDeliveryType(TestDataReader.getDeliveryType());
@@ -89,7 +57,6 @@ public class QrOrderFlowTest {
         cartRequest.setUserName(TestDataReader.getUserName());
         cartRequest.setUserMobileNumber(TestDataReader.getUserMobile());
         cartRequest.setUserCountryCode(TestDataReader.getUserCountryCode());
-
         cartRequest.addItem(
                 TestDataReader.getItem1Id(),
                 TestDataReader.getItem1Price(),
@@ -101,130 +68,68 @@ public class QrOrderFlowTest {
                 TestDataReader.getItem2Quantity()
         );
 
-        Response cartHttpResponse =
-                cartApi.viewCart(
-                        code,
-                        sessionToken,
-                        cartRequest
-                );
+        Response cartHttpResponse = cartApi.viewCart(code, sessionToken, cartRequest);
+        CartResponse cart = cartHttpResponse.as(CartResponse.class);
 
-        System.out.println(
-                "Cart Status Code: " + cartHttpResponse.statusCode()
-        );
+        TestReporter.section("CART");
+        TestReporter.logCartSummary(cart, cartHttpResponse.statusCode());
 
-        Assert.assertEquals(
-                cartHttpResponse.statusCode(),
-                200,
-                "Cart API should return HTTP 200"
-        );
-
-        CartResponse cart =
-                cartHttpResponse.as(CartResponse.class);
-
-        double totalAmount =
-                cart.getData()
-                        .getOrderItemsTotal()
-                        .getTotalAmount();
-
-        double taxTotal =
-                cart.getData()
-                        .getOrderItemsTotal()
-                        .getOriginalTaxTotal();
-
-        double netPayableAmount =
-                cart.getData()
-                        .getOrderItemsTotal()
-                        .getNetPayableAmount();
-
-        System.out.println("Total Amount       : " + totalAmount);
-        System.out.println("Tax Total          : " + taxTotal);
-        System.out.println("Net Payable Amount : " + netPayableAmount);
-
-        Assert.assertEquals(
-                totalAmount,
+        TestReporter.assertEquals("Cart HTTP status", cartHttpResponse.statusCode(), 200);
+        TestReporter.assertEquals(
+                "Cart total",
+                cart.getData().getOrderItemsTotal().getTotalAmount(),
                 TestDataReader.getExpectedTotalAmount(),
-                "Cart total amount should match the selected items"
+                0.01
         );
-        Assert.assertEquals(
-                taxTotal,
+        TestReporter.assertEquals(
+                "Tax",
+                cart.getData().getOrderItemsTotal().getOriginalTaxTotal(),
                 TestDataReader.getExpectedTax(),
-                "Cart tax should match the selected items"
+                0.01
         );
-        Assert.assertEquals(
-                netPayableAmount,
+        TestReporter.assertEquals(
+                "Net payable",
+                cart.getData().getOrderItemsTotal().getNetPayableAmount(),
                 TestDataReader.getExpectedNetPayable(),
-                "Cart net payable should match the selected items"
+                0.01
         );
-
-        String paymentStatus =
-                cart.getData().getPaymentStatus();
-
-        String paymentProvider =
-                cart.getData().getPaymentProviderName();
-
-        System.out.println("Payment Status     : " + paymentStatus);
-        System.out.println("Payment Provider   : " + paymentProvider);
-
-        Assert.assertEquals(
-                paymentStatus,
-                TestDataReader.getExpectedPaymentStatus(),
-                "Cart should still be waiting for payment"
+        TestReporter.assertEquals(
+                "Cart payment status",
+                cart.getData().getPaymentStatus(),
+                TestDataReader.getExpectedPaymentStatus()
         );
-        Assert.assertEquals(
-                paymentProvider,
-                TestDataReader.getExpectedPaymentProvider(),
-                "Cart should use the expected payment provider"
+        TestReporter.assertEquals(
+                "Payment provider",
+                cart.getData().getPaymentProviderName(),
+                TestDataReader.getExpectedPaymentProvider()
         );
+        TestReporter.assertEquals("Expected item count", cart.getData().getOrderItems().size(), 2);
 
-        Assert.assertEquals(
-                cart.getData().getOrderItems().size(),
-                2,
-                "Cart should contain two items"
-        );
+        OrderItem firstItem = cart.getData().getOrderItems().get(0);
+        OrderItem secondItem = cart.getData().getOrderItems().get(1);
 
-        OrderItem firstItem =
-                cart.getData().getOrderItems().get(0);
-
-        System.out.println(
-                "First Item ID      : " + firstItem.getItemObjectId()
-        );
-        System.out.println(
-                "First Item Name    : " + firstItem.getName()
-        );
-        System.out.println(
-                "First Item Quantity: " + firstItem.getQuantity()
-        );
-
-        Assert.assertEquals(
+        TestReporter.assertEquals(
+                "First item ID",
                 String.valueOf(firstItem.getItemObjectId()),
-                TestDataReader.getItem1Id(),
-                "First cart item ID should match test data"
+                TestDataReader.getItem1Id()
         );
-        Assert.assertEquals(
+        TestReporter.assertEqualsRaw(
+                "First item quantity",
                 firstItem.getQuantity(),
-                (double) TestDataReader.getItem1Quantity(),
-                "First cart item quantity should match test data"
+                TestDataReader.getItem1Quantity(),
+                0.0
         );
-
-        OrderItem secondItem =
-                cart.getData().getOrderItems().get(1);
-
-        Assert.assertEquals(
+        TestReporter.assertEquals(
+                "Second item ID",
                 String.valueOf(secondItem.getItemObjectId()),
-                TestDataReader.getItem2Id(),
-                "Second cart item ID should match test data"
+                TestDataReader.getItem2Id()
         );
-        Assert.assertEquals(
+        TestReporter.assertEqualsRaw(
+                "Second item quantity",
                 secondItem.getQuantity(),
-                (double) TestDataReader.getItem2Quantity(),
-                "Second cart item quantity should match test data"
+                TestDataReader.getItem2Quantity(),
+                0.0
         );
-
-        // ==========================================
-        // Step 3: Initiate payment
-        // Live response fields: success, payment_url, pg_name, order_id, payment_log_id.
-        // There is no ct in this response — do not invent one.
-        // ==========================================
 
         PaymentRequest paymentRequest = PaymentRequest.fromCart(cartRequest);
         paymentRequest.setPayMode(TestDataReader.getPayMode());
@@ -232,133 +137,75 @@ public class QrOrderFlowTest {
         paymentRequest.setOrderType(TestDataReader.getOrderType());
         paymentRequest.setUserMobileNumber(TestDataReader.getPaymentUserMobile());
 
-        Response paymentHttpResponse =
-                paymentApi.initiatePayment(
-                        code,
-                        sessionToken,
-                        paymentRequest
-                );
+        Response paymentHttpResponse = paymentApi.initiatePayment(code, sessionToken, paymentRequest);
+        PaymentResponse payment = paymentHttpResponse.as(PaymentResponse.class);
+        String paymentUrl = payment.getData().getPaymentUrl();
 
-        Assert.assertEquals(
-                paymentHttpResponse.statusCode(),
-                200,
-                "Initiate Payment API should return HTTP 200"
-        );
+        TestReporter.logPaymentSummary(payment.getData());
+        TestReporter.data("Payment URL", paymentUrl == null || paymentUrl.isBlank() ? "missing" : "present");
 
-        PaymentResponse payment =
-                paymentHttpResponse.as(PaymentResponse.class);
-
-        Assert.assertTrue(
-                payment.getData().isSuccess(),
-                "Initiate payment should return data.success = true"
-        );
-        Assert.assertEquals(
+        TestReporter.assertEquals("Initiate payment HTTP status", paymentHttpResponse.statusCode(), 200);
+        TestReporter.assertTrue("Payment session created", payment.getData().isSuccess());
+        TestReporter.assertEquals(
+                "Initiate payment provider",
                 payment.getData().getPgName(),
-                TestDataReader.getExpectedPaymentProvider(),
-                "Initiate payment should use the expected payment provider"
+                TestDataReader.getExpectedPaymentProvider()
         );
-        Assert.assertNotNull(
-                payment.getData().getPaymentUrl(),
-                "Initiate payment should return a Telr payment_url"
+        TestReporter.assertNotNull("Telr payment URL is present", paymentUrl);
+        TestReporter.assertTrue(
+                "Payment URL points at Telr",
+                paymentUrl != null && paymentUrl.startsWith("https://secure.telr.com")
         );
-        Assert.assertTrue(
-                payment.getData().getPaymentUrl().startsWith("https://secure.telr.com"),
-                "payment_url should point at the Telr hosted page"
+        TestReporter.assertNotNull("Order ID generated", payment.getData().getOrderId());
+        TestReporter.assertTrue(
+                "Order ID is a positive number",
+                payment.getData().getOrderId() != null && payment.getData().getOrderId() > 0
         );
-        Assert.assertNotNull(
-                payment.getData().getOrderId(),
-                "Initiate payment should return an order_id"
-        );
-        Assert.assertTrue(
-                payment.getData().getOrderId() > 0,
-                "order_id should be a positive number"
-        );
-        Assert.assertNotNull(
-                payment.getData().getPaymentLogId(),
-                "Initiate payment should return a payment_log_id"
-        );
-
-        System.out.println("Payment success : " + payment.getData().isSuccess());
-        System.out.println("Payment PG      : " + payment.getData().getPgName());
-        System.out.println("Order ID        : " + payment.getData().getOrderId());
-        System.out.println("Payment log ID  : " + payment.getData().getPaymentLogId());
+        TestReporter.assertNotNull("Payment log ID generated", payment.getData().getPaymentLogId());
 
         if (!TelrCardDetails.isConfigured()) {
-            printLine("ORDER NUMBER    : not created yet (Telr payment was skipped)");
-            printLine(
-                    "Set TELR_CARD_NUMBER, TELR_CVV, TELR_EXP_MONTH, TELR_EXP_YEAR "
-                            + "in IntelliJ Run Configuration env, -D VM options, "
-                            + "or gitignored telr.local.properties."
+            TestReporter.result(
+                    "Payment session created. Hosted payment was skipped because card details are not configured, so no order was created."
             );
             return;
         }
 
-        // ==========================================
-        // Step 4: Telr hosted page (browser)
-        // ct arrives on the Paytm return URL after Telr redirects.
-        // ==========================================
-
-        String returnUrl =
-                new TelrHostedPage().completePaymentAndReturnPaytmUrl(
-                        payment.getData().getPaymentUrl()
-                );
-
+        String returnUrl = new TelrHostedPage().completePaymentAndReturnPaytmUrl(
+                payment.getData().getPaymentUrl()
+        );
         String ct = PaymentReturnUrl.extractCt(returnUrl);
-        Assert.assertFalse(ct.isBlank(), "Telr return URL should contain ct");
-        System.out.println("Return ct       : " + TokenMasker.mask(ct));
+        TestReporter.assertTrue("Telr return link contains payment continuation token", ct != null && !ct.isBlank());
 
-        // ==========================================
-        // Step 5: Confirm order was created
-        // ==========================================
+        Response paymentStatusHttpResponse = paymentApi.fetchPaymentStatus(code, sessionToken, ct);
+        PaymentStatusResponse orderConfirmation = paymentStatusHttpResponse.as(PaymentStatusResponse.class);
 
-        Response paymentStatusHttpResponse =
-                paymentApi.fetchPaymentStatus(code, sessionToken, ct);
-
-        Assert.assertEquals(
-                paymentStatusHttpResponse.statusCode(),
-                200,
-                "Payment status API should return HTTP 200"
+        boolean paymentSuccess = TestDataReader.getExpectedAfterPaymentStatus()
+                .equals(orderConfirmation.getData().getPaymentStatus());
+        TestReporter.logPaymentSummary(
+                payment.getData().getPgName(),
+                paymentSuccess,
+                orderConfirmation.getData().getPaymentStatus()
         );
+        TestReporter.logOrderSummary(orderConfirmation.getData());
 
-        PaymentStatusResponse orderConfirmation =
-                paymentStatusHttpResponse.as(PaymentStatusResponse.class);
-
-        Assert.assertTrue(
-                orderConfirmation.getData().isTerminalStatus(),
-                "Payment should have reached a terminal status"
-        );
-        Assert.assertEquals(
+        TestReporter.assertEquals("Payment status HTTP status", paymentStatusHttpResponse.statusCode(), 200);
+        TestReporter.assertTrue("Payment reached terminal status", orderConfirmation.getData().isTerminalStatus());
+        TestReporter.assertEquals(
+                "Payment status",
                 orderConfirmation.getData().getPaymentStatus(),
-                TestDataReader.getExpectedAfterPaymentStatus(),
-                "Payment should be successful after Telr return"
+                TestDataReader.getExpectedAfterPaymentStatus()
         );
-        Assert.assertEquals(
+        TestReporter.assertEquals(
+                "Order status",
                 orderConfirmation.getData().getOrderStatus(),
-                TestDataReader.getExpectedAfterOrderStatus(),
-                "Order should be accepted after successful payment"
+                TestDataReader.getExpectedAfterOrderStatus()
         );
-        Assert.assertEquals(
+        TestReporter.assertEquals(
+                "Confirmed order ID matches payment session",
                 orderConfirmation.getData().getOrderId(),
-                payment.getData().getOrderId(),
-                "Confirmed order_id should match initiate_payment order_id"
+                payment.getData().getOrderId()
         );
-        Assert.assertNotNull(
-                orderConfirmation.getData().getOrderNumber(),
-                "Confirmed order should have an order_number"
-        );
-        Assert.assertFalse(
-                orderConfirmation.getData().getOrderNumber().isBlank(),
-                "order_number should not be blank"
-        );
-
-        printOrderNumber(orderConfirmation.getData().getOrderNumber());
-        printLine("Order status    : " + orderConfirmation.getData().getOrderStatus());
-        printLine("Final payment   : " + orderConfirmation.getData().getPaymentStatus());
-
-        // ==========================================
-        // Step 6: After-payment page vs cart summary
-        // Same items and amounts must appear after payment.
-        // ==========================================
+        TestReporter.assertNotBlank("Order number generated", orderConfirmation.getData().getOrderNumber());
 
         ConfirmationCartRequest confirmationRequest = new ConfirmationCartRequest();
         confirmationRequest.setOrderSource(TestDataReader.getOrderSource());
@@ -368,135 +215,87 @@ public class QrOrderFlowTest {
 
         Response afterPaymentHttpResponse =
                 cartApi.viewCustomerCart(code, sessionToken, ct, confirmationRequest);
+        CartResponse afterPayment = afterPaymentHttpResponse.as(CartResponse.class);
 
-        Assert.assertEquals(
-                afterPaymentHttpResponse.statusCode(),
-                200,
-                "After-payment cart API should return HTTP 200"
-        );
+        TestReporter.logOrderItems(afterPayment.getData().getOrderItems());
+        TestReporter.logTotals(afterPayment.getData().getOrderItemsTotal());
 
-        CartResponse afterPayment =
-                afterPaymentHttpResponse.as(CartResponse.class);
-
-        printSummary("CART SUMMARY (before payment)", cart);
-        printSummary("AFTER PAYMENT PAGE", afterPayment);
-        System.out.println(
-                "Compared: item name, qty, line net, total, tax, net payable. "
-                        + "Unit price can differ after payment (tax-exclusive)."
-        );
-
+        TestReporter.assertEquals("After-payment HTTP status", afterPaymentHttpResponse.statusCode(), 200);
         assertSameItemAndAmountSummary(cart, afterPayment);
-        Assert.assertEquals(
+        TestReporter.assertEquals(
+                "After-payment payment status",
                 afterPayment.getData().getPaymentStatus(),
-                TestDataReader.getExpectedAfterPaymentStatus(),
-                "After-payment page should show payment_success"
+                TestDataReader.getExpectedAfterPaymentStatus()
         );
 
         String pageOrderNumber = afterPayment.getData().getOrderNumber();
-        Assert.assertNotNull(
+        TestReporter.assertNotBlank("After-payment order number generated", pageOrderNumber);
+        TestReporter.assertEquals(
+                "After-payment order number matches payment status",
                 pageOrderNumber,
-                "After-payment page new_order_items should contain order_number"
-        );
-        Assert.assertFalse(
-                pageOrderNumber.isBlank(),
-                "After-payment page order_number should not be blank"
-        );
-        Assert.assertEquals(
-                pageOrderNumber,
-                orderConfirmation.getData().getOrderNumber(),
-                "After-payment page order_number should match fetch_payment_status"
+                orderConfirmation.getData().getOrderNumber()
         );
 
+        boolean confirmationLinesMatch = true;
         for (NewOrderItem line : afterPayment.getData().getNewOrderItems()) {
-            Assert.assertEquals(
-                    line.getOrderNumber(),
-                    pageOrderNumber,
-                    "Every confirmation line should show the same order_number"
-            );
+            if (!pageOrderNumber.equals(line.getOrderNumber())) {
+                confirmationLinesMatch = false;
+                break;
+            }
         }
+        TestReporter.assertTrue(
+                "Every confirmation line shows the same order number",
+                confirmationLinesMatch
+        );
 
-        printOrderNumber(pageOrderNumber);
-    }
-
-    private void printOrderNumber(String orderNumber) {
-        printLine("========================================");
-        printLine("ORDER NUMBER    : " + orderNumber);
-        printLine("========================================");
-    }
-
-    private void printLine(String message) {
-        System.out.println(message);
-        Reporter.log(message);
-    }
-
-    private void printSummary(String title, CartResponse cart) {
-        System.out.println("----- " + title + " -----");
-        for (OrderItem item : cart.getData().getOrderItems()) {
-            System.out.println(
-                    "Item " + item.getItemObjectId()
-                            + " | " + item.getName()
-                            + " | qty " + item.getQuantity()
-                            + " | price " + item.getPrice()
-                            + " | net " + item.getNetPrice()
-            );
-        }
-        OrderItemsTotal totals = cart.getData().getOrderItemsTotal();
-        System.out.println("Total  : " + totals.getTotalAmount());
-        System.out.println("Tax    : " + totals.getOriginalTaxTotal());
-        System.out.println("Net    : " + totals.getNetPayableAmount());
-        System.out.println("Pay st : " + cart.getData().getPaymentStatus());
-        if (cart.getData().getOrderNumber() != null) {
-            System.out.println("ORDER NUMBER    : " + cart.getData().getOrderNumber());
-        }
+        TestReporter.result("Payment completed successfully and order was accepted.");
     }
 
     private void assertSameItemAndAmountSummary(CartResponse summary, CartResponse afterPayment) {
-        Assert.assertEquals(
+        TestReporter.assertEquals(
+                "After-payment item count",
                 afterPayment.getData().getOrderItems().size(),
-                summary.getData().getOrderItems().size(),
-                "After-payment page should show the same number of items as the cart summary"
+                summary.getData().getOrderItems().size()
         );
 
         for (OrderItem before : summary.getData().getOrderItems()) {
             OrderItem after = findItemByName(afterPayment, before.getName());
-            Assert.assertNotNull(
-                    after,
-                    "After-payment page is missing cart item: " + before.getName()
-            );
-            Assert.assertEquals(
-                    after.getQuantity(),
+            String itemName = TestReporter.displayItemName(before.getName());
+            TestReporter.assertNotNull("After-payment item present: " + itemName, after);
+            TestReporter.assertEqualsRaw(
+                    "Quantity for " + itemName,
+                    after == null ? 0 : after.getQuantity(),
                     before.getQuantity(),
-                    0.0,
-                    "Quantity for " + before.getName() + " should match cart summary"
+                    0.0
             );
-            Assert.assertEquals(
-                    after.getNetPrice(),
+            TestReporter.assertEquals(
+                    "Line total for " + itemName,
+                    after == null ? 0 : after.getNetPrice(),
                     before.getNetPrice(),
-                    0.01,
-                    "Line amount for " + before.getName() + " should match cart summary"
+                    0.01
             );
         }
 
         OrderItemsTotal beforeTotals = summary.getData().getOrderItemsTotal();
         OrderItemsTotal afterTotals = afterPayment.getData().getOrderItemsTotal();
 
-        Assert.assertEquals(
+        TestReporter.assertEquals(
+                "After-payment total",
                 afterTotals.getTotalAmount(),
                 beforeTotals.getTotalAmount(),
-                0.01,
-                "Total amount on after-payment page should match cart summary"
+                0.01
         );
-        Assert.assertEquals(
+        TestReporter.assertEquals(
+                "After-payment tax",
                 afterTotals.getOriginalTaxTotal(),
                 beforeTotals.getOriginalTaxTotal(),
-                0.01,
-                "Tax on after-payment page should match cart summary"
+                0.01
         );
-        Assert.assertEquals(
+        TestReporter.assertEquals(
+                "After-payment net payable",
                 afterTotals.getNetPayableAmount(),
                 beforeTotals.getNetPayableAmount(),
-                0.01,
-                "Net payable on after-payment page should match cart summary"
+                0.01
         );
     }
 

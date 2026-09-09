@@ -80,7 +80,7 @@ pipeline {
             )
 
             archiveArtifacts(
-                artifacts: 'reports/extent-report.html',
+                artifacts: 'reports/**',
                 allowEmptyArchive: true
             )
 

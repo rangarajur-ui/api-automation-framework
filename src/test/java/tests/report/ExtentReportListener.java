@@ -15,7 +15,8 @@ import org.testng.ITestResult;
 import java.nio.file.Path;
 
 /**
- * Writes reports/extent-report.html after each suite.
+ * Writes a self-contained reports/extent-report.html after each suite.
+ * Offline mode keeps CSS/JS next to the HTML so Jenkins HTML Publisher can render it.
  */
 public class ExtentReportListener implements ITestListener, ISuiteListener {
 
@@ -29,6 +30,10 @@ public class ExtentReportListener implements ITestListener, ISuiteListener {
         spark.config().setDocumentTitle("QR API Automation");
         spark.config().setReportName("Paytm QR API — " + suite.getName());
         spark.config().setTheme(Theme.STANDARD);
+        spark.config().setOfflineMode(true);
+        spark.config().setEncoding("utf-8");
+        spark.config().setCss(reportCss());
+        spark.config().setTimeStampFormat("dd MMM yyyy, HH:mm:ss");
 
         extent = new ExtentReports();
         extent.attachReporter(spark);
@@ -53,34 +58,54 @@ public class ExtentReportListener implements ITestListener, ISuiteListener {
 
     @Override
     public void onTestStart(ITestResult result) {
-        String testName = result.getMethod().getMethodName();
-        Object[] params = result.getParameters();
-        if (params != null && params.length > 0 && params[0] != null) {
-            testName = testName + " [" + params[0] + "]";
-        }
-        ExtentTest test = extent.createTest(testName);
+        TestInfo info = TestCatalog.info(result);
+        ExtentTest test = extent.createTest(info.title(), info.purpose());
         test.assignAuthor(ConfigReader.getReportTesterName());
         test.assignDevice(ConfigReader.getReportEnvironment());
+        test.assignCategory(info.flow());
+
         String className = result.getTestClass().getName();
         test.assignCategory(className.substring(className.lastIndexOf('.') + 1));
         for (String group : result.getMethod().getGroups()) {
             test.assignCategory(group);
         }
+
         CURRENT.set(test);
+        TestReporter.attach(test, info);
     }
 
     @Override
     public void onTestSuccess(ITestResult result) {
-        CURRENT.get().log(Status.PASS, "Passed");
+        TestReporter.finish(result);
+        CURRENT.remove();
     }
 
     @Override
     public void onTestFailure(ITestResult result) {
-        CURRENT.get().log(Status.FAIL, result.getThrowable());
+        TestReporter.recordListenerFailure(result);
+        TestReporter.finish(result);
+        CURRENT.remove();
     }
 
     @Override
     public void onTestSkipped(ITestResult result) {
-        CURRENT.get().log(Status.SKIP, "Skipped");
+        ExtentTest test = CURRENT.get();
+        if (test != null) {
+            String reason = result.getThrowable() == null
+                    ? "Skipped"
+                    : result.getThrowable().getMessage();
+            test.log(Status.SKIP, reason == null ? "Skipped" : reason);
+        }
+        System.out.println("Result           : Skipped");
+        TestReporter.finish(result);
+        CURRENT.remove();
+    }
+
+    private static String reportCss() {
+        return """
+                .card-header { background: #1f4e79 !important; }
+                .badge-primary { background: #1f4e79 !important; }
+                table { font-size: 13px; }
+                """;
     }
 }

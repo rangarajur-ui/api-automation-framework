@@ -4,13 +4,13 @@ import api.CartApi;
 import api.PaymentApi;
 import config.TestDataReader;
 import io.restassured.response.Response;
-import org.testng.Assert;
 import org.testng.annotations.Test;
 import pojo.request.CartRequest;
 import pojo.request.PaymentRequest;
 import pojo.response.CartResponse;
 import pojo.response.OrderItem;
 import pojo.response.PaymentResponse;
+import tests.report.TestReporter;
 import tests.support.QrTestHelper;
 
 /**
@@ -19,39 +19,42 @@ import tests.support.QrTestHelper;
  */
 public class InstructionTests {
 
-    @Test(groups = {"sanity", "regression"})
+    @Test(groups = {"sanity", "regression"},
+            description = "Validates that an item instruction is stored as notes without changing totals.")
     public void itemInstructionIsStoredAsNotes() {
         String token = QrTestHelper.newSessionToken();
         CartRequest cartRequest = cartWithItemInstruction();
 
         Response cartHttpResponse =
                 new CartApi().viewCart(TestDataReader.getQrCode(), token, cartRequest);
-        Assert.assertEquals(cartHttpResponse.statusCode(), 200);
-
         CartResponse cart = cartHttpResponse.as(CartResponse.class);
         OrderItem first = cart.getData().getOrderItems().get(0);
         OrderItem second = cart.getData().getOrderItems().get(1);
 
-        Assert.assertEquals(
+        TestReporter.data("Item Notes", first.getNotes());
+        TestReporter.logCartSummary(cart, cartHttpResponse.statusCode());
+
+        TestReporter.assertEquals("HTTP status validation", cartHttpResponse.statusCode(), 200);
+        TestReporter.assertEquals(
+                "Item instruction stored as notes",
                 first.getNotes(),
-                TestDataReader.getItemInstruction(),
-                "item_instruction should come back as notes on the first item"
+                TestDataReader.getItemInstruction()
         );
-        Assert.assertTrue(
-                second.getNotes() == null || second.getNotes().isBlank(),
-                "Second item has no instruction"
+        TestReporter.assertTrue(
+                "Second item has no instruction",
+                second.getNotes() == null || second.getNotes().isBlank()
         );
-        Assert.assertEquals(
+        TestReporter.assertEquals(
+                "Cart total unchanged by instruction",
                 cart.getData().getOrderItemsTotal().getTotalAmount(),
                 TestDataReader.getExpectedTotalAmount(),
-                0.01,
-                "Instructions must not change the 20.0 total"
+                0.01
         );
-
-        System.out.println("Item notes : " + first.getNotes());
+        TestReporter.result("Item instruction stored as notes.");
     }
 
-    @Test(groups = {"sanity", "regression"})
+    @Test(groups = {"sanity", "regression"},
+            description = "Validates that order-level cooking details are accepted when payment is initiated.")
     public void orderLevelCookingDetailsCanInitiatePayment() {
         String token = QrTestHelper.newSessionToken();
         CartRequest cartRequest = cartWithItemInstruction();
@@ -64,17 +67,19 @@ public class InstructionTests {
                 token,
                 paymentRequest
         );
-        Assert.assertEquals(paymentHttpResponse.statusCode(), 200);
-
         PaymentResponse payment = paymentHttpResponse.as(PaymentResponse.class);
-        Assert.assertTrue(
-                payment.getData().isSuccess(),
-                "initiate_payment should accept cooking_details"
-        );
-        Assert.assertNotNull(payment.getData().getOrderId());
 
-        System.out.println("Order instruction sent : " + TestDataReader.getOrderInstruction());
-        System.out.println("Payment order_id       : " + payment.getData().getOrderId());
+        TestReporter.data("Cooking Details Sent", TestDataReader.getOrderInstruction());
+        TestReporter.data("HTTP Status", paymentHttpResponse.statusCode());
+        TestReporter.data("Payment Success", payment.getData().isSuccess());
+        if (payment.getData().getOrderId() != null) {
+            TestReporter.data("Order ID", payment.getData().getOrderId());
+        }
+
+        TestReporter.assertEquals("HTTP status validation", paymentHttpResponse.statusCode(), 200);
+        TestReporter.assertTrue("Payment session accepts cooking details", payment.getData().isSuccess());
+        TestReporter.assertNotNull("Order ID generated", payment.getData().getOrderId());
+        TestReporter.result("Cooking details accepted and payment session created.");
     }
 
     private CartRequest cartWithItemInstruction() {

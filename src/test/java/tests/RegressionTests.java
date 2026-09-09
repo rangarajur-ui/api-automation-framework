@@ -4,12 +4,12 @@ import api.CartApi;
 import api.PaymentApi;
 import config.TestDataReader;
 import io.restassured.response.Response;
-import org.testng.Assert;
 import org.testng.annotations.Test;
 import pojo.request.CartRequest;
 import pojo.request.PaymentRequest;
 import pojo.response.CartResponse;
 import pojo.response.PaymentResponse;
+import tests.report.TestReporter;
 import tests.support.QrTestHelper;
 
 /**
@@ -18,44 +18,53 @@ import tests.support.QrTestHelper;
  */
 public class RegressionTests {
 
-    @Test(groups = {"regression"})
+    @Test(groups = {"regression"},
+            description = "Validates that menu, cart totals, and Telr payment initiation stay aligned.")
     public void menuCartAndInitiatePaymentStayAligned() {
         String code = TestDataReader.getQrCode();
         String token = QrTestHelper.newSessionToken();
         CartRequest cartRequest = QrTestHelper.baselineCart();
 
         Response cartHttpResponse = new CartApi().viewCart(code, token, cartRequest);
-        Assert.assertEquals(cartHttpResponse.statusCode(), 200);
         CartResponse cart = cartHttpResponse.as(CartResponse.class);
 
-        Assert.assertEquals(
+        PaymentRequest paymentRequest = QrTestHelper.paymentFromCart(cartRequest);
+        Response paymentHttpResponse = new PaymentApi().initiatePayment(code, token, paymentRequest);
+        PaymentResponse payment = paymentHttpResponse.as(PaymentResponse.class);
+
+        TestReporter.logCartSummary(cart, cartHttpResponse.statusCode());
+        TestReporter.logPaymentSummary(payment.getData());
+
+        TestReporter.assertEquals("HTTP status validation", cartHttpResponse.statusCode(), 200);
+        TestReporter.assertEquals(
+                "Cart total",
                 cart.getData().getOrderItemsTotal().getTotalAmount(),
                 TestDataReader.getExpectedTotalAmount(),
                 0.01
         );
-        Assert.assertEquals(
+        TestReporter.assertEquals(
+                "Net payable",
                 cart.getData().getOrderItemsTotal().getNetPayableAmount(),
                 TestDataReader.getExpectedNetPayable(),
                 0.01
         );
-        Assert.assertEquals(
+        TestReporter.assertEquals(
+                "Payment status",
                 cart.getData().getPaymentStatus(),
                 TestDataReader.getExpectedPaymentStatus()
         );
-
-        PaymentRequest paymentRequest = QrTestHelper.paymentFromCart(cartRequest);
-        Response paymentHttpResponse = new PaymentApi().initiatePayment(code, token, paymentRequest);
-        Assert.assertEquals(paymentHttpResponse.statusCode(), 200);
-
-        PaymentResponse payment = paymentHttpResponse.as(PaymentResponse.class);
-        Assert.assertTrue(payment.getData().isSuccess());
-        Assert.assertEquals(
+        TestReporter.assertEquals("Initiate payment HTTP status", paymentHttpResponse.statusCode(), 200);
+        TestReporter.assertTrue("Payment session created", payment.getData().isSuccess());
+        TestReporter.assertEquals(
+                "Payment provider",
                 payment.getData().getPgName(),
                 TestDataReader.getExpectedPaymentProvider()
         );
-        Assert.assertNotNull(payment.getData().getOrderId());
-        Assert.assertTrue(payment.getData().getOrderId() > 0);
-
-        System.out.println("Regression order_id : " + payment.getData().getOrderId());
+        TestReporter.assertNotNull("Order ID generated", payment.getData().getOrderId());
+        TestReporter.assertTrue(
+                "Order ID is a positive number",
+                payment.getData().getOrderId() != null && payment.getData().getOrderId() > 0
+        );
+        TestReporter.result("Menu, cart, and payment initiation stayed aligned.");
     }
 }

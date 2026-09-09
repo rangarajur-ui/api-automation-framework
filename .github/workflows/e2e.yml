@@ -16,7 +16,7 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "26"
+          java-version: "21"
           cache: maven
       - name: Run Telr E2E suite
         env:
@@ -31,5 +31,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: extent-e2e-report
-          path: reports/extent-report.html
+          path: reports/
           if-no-files-found: ignore

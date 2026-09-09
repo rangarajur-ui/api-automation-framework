@@ -37,8 +37,7 @@ public class TelrHostedPage {
                 fillCardAndSubmit(driver);
             } else {
                 System.out.println(
-                        "Complete payment in the Chrome window using a Telr test card. "
-                                + "Waiting for redirect back to Paytm (ct in the URL)..."
+                        "Telr hosted payment is waiting for a test card to be entered in the browser."
                 );
             }
 

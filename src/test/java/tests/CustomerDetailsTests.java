@@ -4,13 +4,13 @@ import api.CartApi;
 import api.PaymentApi;
 import config.TestDataReader;
 import io.restassured.response.Response;
-import org.testng.Assert;
 import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
 import pojo.request.CartRequest;
 import pojo.request.PaymentRequest;
 import pojo.response.CartResponse;
 import pojo.response.PaymentResponse;
+import tests.report.TestReporter;
 import tests.support.QrTestHelper;
 
 /**
@@ -25,22 +25,15 @@ public class CustomerDetailsTests {
         return TestDataReader.customerVariants();
     }
 
-    @Test(dataProvider = "customers", groups = {"sanity", "regression"})
+    @Test(dataProvider = "customers", groups = {"sanity", "regression"},
+            description = "Validates that guest name and mobile variants can start payment without changing item totals.")
     public void placeOrderWithCustomerDetails(String name, String countryCode, String mobile) {
         String token = QrTestHelper.newSessionToken();
         CartRequest cartRequest = QrTestHelper.baselineCartFor(name, countryCode, mobile);
 
         Response cartHttpResponse =
                 new CartApi().viewCart(TestDataReader.getQrCode(), token, cartRequest);
-        Assert.assertEquals(cartHttpResponse.statusCode(), 200, "Cart should accept customer " + name);
-
         CartResponse cart = cartHttpResponse.as(CartResponse.class);
-        Assert.assertEquals(
-                cart.getData().getOrderItemsTotal().getTotalAmount(),
-                TestDataReader.getExpectedTotalAmount(),
-                0.01,
-                "Items stay 10667+10668; customer change must not change the 20.0 total"
-        );
 
         PaymentRequest paymentRequest = QrTestHelper.paymentFromCart(cartRequest);
         paymentRequest.setUserMobileNumber(QrTestHelper.paymentMobile(countryCode, mobile));
@@ -50,20 +43,33 @@ public class CustomerDetailsTests {
                 token,
                 paymentRequest
         );
-        Assert.assertEquals(paymentHttpResponse.statusCode(), 200, "Initiate payment should accept " + name);
-
         PaymentResponse payment = paymentHttpResponse.as(PaymentResponse.class);
-        Assert.assertTrue(payment.getData().isSuccess(), "Payment session should start for " + name);
-        Assert.assertNotNull(payment.getData().getOrderId());
 
-        System.out.println(
-                "Customer " + name
-                        + " | " + countryCode + " " + mobile
-                        + " | order_id " + payment.getData().getOrderId()
+        TestReporter.data("Customer Name", name);
+        TestReporter.data("Country Code", countryCode);
+        TestReporter.data("Mobile", TestReporter.maskedMobile(mobile));
+        TestReporter.logCartSummary(cart, cartHttpResponse.statusCode());
+        TestReporter.data("Payment HTTP Status", paymentHttpResponse.statusCode());
+        TestReporter.data("Payment Success", payment.getData().isSuccess());
+        if (payment.getData().getOrderId() != null) {
+            TestReporter.data("Order ID", payment.getData().getOrderId());
+        }
+
+        TestReporter.assertEquals("HTTP status validation", cartHttpResponse.statusCode(), 200);
+        TestReporter.assertEquals(
+                "Cart total unchanged by customer details",
+                cart.getData().getOrderItemsTotal().getTotalAmount(),
+                TestDataReader.getExpectedTotalAmount(),
+                0.01
         );
+        TestReporter.assertEquals("Initiate payment HTTP status", paymentHttpResponse.statusCode(), 200);
+        TestReporter.assertTrue("Payment session created", payment.getData().isSuccess());
+        TestReporter.assertNotNull("Order ID generated", payment.getData().getOrderId());
+        TestReporter.result("Customer details accepted and payment session created.");
     }
 
-    @Test(groups = {"negative", "regression"})
+    @Test(groups = {"negative", "regression"},
+            description = "Validates that a mobile number below the accepted length is rejected.")
     public void shortMobileIsRejected() {
         String token = QrTestHelper.newSessionToken();
         CartRequest cartRequest = QrTestHelper.baselineCartFor(
@@ -74,11 +80,19 @@ public class CustomerDetailsTests {
 
         Response cartHttpResponse =
                 new CartApi().viewCart(TestDataReader.getQrCode(), token, cartRequest);
+        String actualMessage = QrTestHelper.apiErrorMessage(cartHttpResponse);
 
-        Assert.assertEquals(cartHttpResponse.statusCode(), 422, "Short mobile should return HTTP 422");
-        Assert.assertTrue(
-                QrTestHelper.apiErrorMessage(cartHttpResponse).contains("couldn't process"),
-                "Short mobile should be rejected"
+        TestReporter.logNegative(
+                "Cart request with a short mobile number",
+                "Mobile shorter than accepted length",
+                422,
+                cartHttpResponse.statusCode(),
+                "couldn't process",
+                actualMessage
         );
+
+        TestReporter.assertEquals("HTTP status validation", cartHttpResponse.statusCode(), 422);
+        TestReporter.assertContains("Error response validation", actualMessage, "couldn't process");
+        TestReporter.result("Short mobile number was rejected.");
     }
 }
