@@ -28,7 +28,7 @@ public class QrOrderFlowTest {
         String sessionToken = menu.getData().getToken();
 
         TestReporter.section("BUSINESS FLOW");
-        TestReporter.data("Flow", "Menu → Cart → Customer → Telr Payment → Order");
+        TestReporter.data("Flow", "Menu → Cart → Customer → Telr Payment → Order → OMS");
         TestReporter.logAccount(accountId, accountName);
         TestReporter.data("Menu HTTP Status", menuResponse.statusCode());
         TestReporter.data("Session Token", sessionToken == null || sessionToken.isBlank() ? "missing" : "present");

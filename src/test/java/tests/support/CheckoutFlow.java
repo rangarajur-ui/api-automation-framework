@@ -139,6 +139,12 @@ public final class CheckoutFlow {
 
         CheckoutStats.orderCreated();
 
+        TestReporter.section("OMS");
+        TestReporter.data("OMS Credentials", OmsCredentials.isConfigured() ? "present" : "missing");
+        TestReporter.data("OMS Verification Status", OmsCredentials.isConfigured() ? "started" : "blocked");
+        if (!OmsCredentials.isConfigured()) {
+            TestReporter.data("OMS Required Variables", OmsCredentials.missingRequiredNames());
+        }
         TestReporter.assertTrue("OMS credentials are configured", OmsCredentials.isConfigured());
         Integer orderId = status.getData().getOrderId();
         Response omsHttp = new OmsApi().getOrderDetails(orderId);
@@ -203,6 +209,7 @@ public final class CheckoutFlow {
                 confirmation.getData().getOrderItemsTotal().getTotalAmount(),
                 0.01
         );
+        TestReporter.data("OMS Verification Status", "passed");
 
         return new CheckoutResult(payment, status, confirmation, confirmationHttp, oms, omsHttp);
     }

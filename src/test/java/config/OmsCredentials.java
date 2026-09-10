@@ -17,12 +17,21 @@ public class OmsCredentials {
     private static final Properties LOCAL = loadLocalFile();
 
     public static boolean isConfigured() {
-        return isPresent(getAuthToken())
-                && isPresent(getAaToken())
-                && isPresent(getSwitchToken())
-                && isPresent(getSwitchedUserToken())
-                && isPresent(getTenantToken())
-                && isPresent(getEsSessionId());
+        return missingRequiredNames().isEmpty();
+    }
+
+    /**
+     * Env / -D names CheckoutFlow requires. Names only — never include values.
+     */
+    public static String missingRequiredNames() {
+        StringBuilder missing = new StringBuilder();
+        appendIfBlank(missing, "OMS_AUTH_TOKEN", getAuthToken());
+        appendIfBlank(missing, "OMS_AA_TOKEN", getAaToken());
+        appendIfBlank(missing, "OMS_SWITCH_TOKEN", getSwitchToken());
+        appendIfBlank(missing, "OMS_SWITCHED_USER_TOKEN", getSwitchedUserToken());
+        appendIfBlank(missing, "OMS_TENANT_TOKEN", getTenantToken());
+        appendIfBlank(missing, "OMS_ES_SESSION_ID", getEsSessionId());
+        return missing.toString();
     }
 
     public static String getAuthToken() {
@@ -67,6 +76,16 @@ public class OmsCredentials {
             return fromFile.trim();
         }
         return "";
+    }
+
+    private static void appendIfBlank(StringBuilder missing, String name, String value) {
+        if (isPresent(value)) {
+            return;
+        }
+        if (!missing.isEmpty()) {
+            missing.append(", ");
+        }
+        missing.append(name);
     }
 
     private static boolean isPresent(String value) {

@@ -512,6 +512,8 @@ public final class TestReporter {
         String key = label == null ? "" : label.toLowerCase(Locale.ROOT);
         return key.contains("token")
                 || key.contains("authorization")
+                || key.contains("auth-token")
+                || key.contains("aa-token")
                 || key.contains("password")
                 || key.contains("secret")
                 || key.contains("card number")

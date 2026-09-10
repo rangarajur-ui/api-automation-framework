@@ -24,6 +24,14 @@ jobs:
           TELR_EXP_MONTH: ${{ secrets.TELR_EXP_MONTH }}
           TELR_EXP_YEAR: ${{ secrets.TELR_EXP_YEAR }}
           TELR_HEADLESS: "true"
+          # Same names as OmsCredentials / OmsApi. Default env is test (testdeploy).
+          OMS_AUTH_TOKEN: ${{ secrets.OMS_AUTH_TOKEN }}
+          OMS_AA_TOKEN: ${{ secrets.OMS_AA_TOKEN }}
+          OMS_SWITCH_TOKEN: ${{ secrets.OMS_SWITCH_TOKEN }}
+          OMS_SWITCHED_USER_TOKEN: ${{ secrets.OMS_SWITCHED_USER_TOKEN }}
+          OMS_TENANT_TOKEN: ${{ secrets.OMS_TENANT_TOKEN }}
+          OMS_ES_SESSION_ID: ${{ secrets.OMS_ES_SESSION_ID }}
+          OMS_COUNTER_SHIFT_ID: ${{ secrets.OMS_COUNTER_SHIFT_ID }}
         run: mvn -B test -Pe2e
       - name: Upload Extent report
         if: always()
