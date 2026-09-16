@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>QR Automation Explorer</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app">
+    <header class="top">
+      <div class="brand">
+        <span class="mark" aria-hidden="true"></span>
+        QR Automation Explorer
+      </div>
+      <div class="audience" id="audience" role="tablist" aria-label="Audience"></div>
+      <div class="modes" id="modes" role="tablist" aria-label="View"></div>
+      <button class="icon-btn" id="openSearch" type="button" title="Search (⌘K or /)">Search</button>
+      <button class="icon-btn" id="theme" type="button">Light</button>
+      <button class="icon-btn drawer-btn" id="openDetails" type="button">Details</button>
+    </header>
+    <div class="main">
+      <aside class="nav" id="navPane">
+        <div class="kicker" id="treeTitle">Browse</div>
+        <div id="tree"></div>
+      </aside>
+      <section class="stage">
+        <div class="toolbar" id="toolbar">
+          <button class="icon-btn" id="zoomIn" type="button">Zoom +</button>
+          <button class="icon-btn" id="zoomOut" type="button">Zoom −</button>
+          <button class="icon-btn" id="fit" type="button">Fit</button>
+          <button class="icon-btn" id="reset" type="button">Reset</button>
+          <button class="icon-btn" id="focusSel" type="button">Focus</button>
+          <label class="toggle"><input type="checkbox" id="hideUnrelated"> Hide unrelated</label>
+          <button class="icon-btn" id="exportJson" type="button">Export JSON</button>
+          <button class="icon-btn" id="exportMermaid" type="button">Export Mermaid</button>
+        </div>
+        <svg id="graph" role="img" aria-label="Architecture graph"></svg>
+        <div class="minimap" id="minimap" hidden></div>
+        <div class="business" id="business" hidden></div>
+      </section>
+      <aside class="details" id="detailsPane">
+        <div class="crumb" id="crumb"></div>
+        <div class="explain-toggle">
+          <button type="button" id="simpleBtn" class="active">Simple</button>
+          <button type="button" id="techBtn">Technical</button>
+        </div>
+        <div id="panel"></div>
+      </aside>
+    </div>
+    <footer class="status">
+      <div class="controls">
+        <button class="icon-btn" id="play" type="button">Play</button>
+        <button class="icon-btn" id="prev" type="button">Prev</button>
+        <button class="icon-btn" id="next" type="button">Next</button>
+        <button class="icon-btn" id="restart" type="button">Restart</button>
+        <span class="muted" id="stepLabel">Flow idle</span>
+      </div>
+      <div class="legend" id="legend"></div>
+      <div class="muted" id="meta"></div>
+    </footer>
+  </div>
+  <div class="overlay" id="overlay" hidden>
+    <div class="palette" role="dialog" aria-label="Search">
+      <input id="paletteInput" placeholder="Class, test, endpoint, method, package…" autocomplete="off">
+      <div id="hits"></div>
+    </div>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

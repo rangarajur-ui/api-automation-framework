@@ -51,3 +51,6 @@ src/test/resources/oms.*.local.properties
 ### Reports ###
 reports/
 test-output/
+
+### Explorer local server leftovers ###
+explorer/.cache/

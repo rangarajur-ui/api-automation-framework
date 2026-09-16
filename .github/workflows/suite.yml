@@ -1,0 +1,102 @@
+name: Test suite
+
+# Same SUITE + ENV choices as Jenkins. Nightly runs regression on test.
+# smoke / negative: API only.
+# sanity / customization / regression / e2e: Chrome + Telr + OMS.
+# Telr cards are shared. OMS tokens are per restaurant: repo secrets for test
+# (testdeploy), *_STAGING secrets for staging (sprint205).
+on:
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: Which TestNG suite to run. Use smoke for every commit. sanity / customization / regression / e2e complete Telr payment.
+        type: choice
+        options:
+          - smoke
+          - negative
+          - sanity
+          - customization
+          - regression
+          - e2e
+        default: regression
+      env:
+        description: Target server. test = testdeploy channel. staging = sprint205.
+        type: choice
+        options:
+          - test
+          - staging
+        default: test
+  schedule:
+    - cron: "0 18 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: suite-${{ github.event.inputs.env || 'test' }}-${{ github.event.inputs.suite || 'regression' }}
+  cancel-in-progress: false
+
+jobs:
+  api:
+    if: github.event_name == 'workflow_dispatch' && contains(fromJSON('["smoke","negative"]'), inputs.suite)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      ENV: ${{ inputs.env || 'test' }}
+      SUITE: ${{ inputs.suite }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - name: Run ${{ env.SUITE }} suite
+        run: mvn -B test -P${{ env.SUITE }} -Denv=${{ env.ENV }}
+      - name: Upload Extent report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: extent-${{ env.SUITE }}-report-${{ env.ENV }}
+          path: reports/
+          if-no-files-found: ignore
+
+  checkout:
+    if: github.event_name == 'schedule' || contains(fromJSON('["sanity","customization","regression","e2e"]'), inputs.suite)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      ENV: ${{ inputs.env || 'test' }}
+      SUITE: ${{ inputs.suite || 'regression' }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - name: Verify Chrome
+        run: google-chrome --version
+      - name: Run ${{ env.SUITE }} suite
+        env:
+          TELR_CARD_NUMBER: ${{ secrets.TELR_CARD_NUMBER }}
+          TELR_CVV: ${{ secrets.TELR_CVV }}
+          TELR_EXP_MONTH: ${{ secrets.TELR_EXP_MONTH }}
+          TELR_EXP_YEAR: ${{ secrets.TELR_EXP_YEAR }}
+          TELR_HEADLESS: "true"
+          # Empty staging secrets must not fall back to testdeploy tokens.
+          OMS_AUTH_TOKEN: ${{ env.ENV == 'staging' && secrets.OMS_AUTH_TOKEN_STAGING || env.ENV != 'staging' && secrets.OMS_AUTH_TOKEN || '' }}
+          OMS_AA_TOKEN: ${{ env.ENV == 'staging' && secrets.OMS_AA_TOKEN_STAGING || env.ENV != 'staging' && secrets.OMS_AA_TOKEN || '' }}
+          OMS_SWITCH_TOKEN: ${{ env.ENV == 'staging' && secrets.OMS_SWITCH_TOKEN_STAGING || env.ENV != 'staging' && secrets.OMS_SWITCH_TOKEN || '' }}
+          OMS_SWITCHED_USER_TOKEN: ${{ env.ENV == 'staging' && secrets.OMS_SWITCHED_USER_TOKEN_STAGING || env.ENV != 'staging' && secrets.OMS_SWITCHED_USER_TOKEN || '' }}
+          OMS_TENANT_TOKEN: ${{ env.ENV == 'staging' && secrets.OMS_TENANT_TOKEN_STAGING || env.ENV != 'staging' && secrets.OMS_TENANT_TOKEN || '' }}
+          OMS_ES_SESSION_ID: ${{ env.ENV == 'staging' && secrets.OMS_ES_SESSION_ID_STAGING || env.ENV != 'staging' && secrets.OMS_ES_SESSION_ID || '' }}
+          OMS_COUNTER_SHIFT_ID: ${{ env.ENV == 'staging' && secrets.OMS_COUNTER_SHIFT_ID_STAGING || env.ENV != 'staging' && secrets.OMS_COUNTER_SHIFT_ID || '' }}
+        run: mvn -B test -P${{ env.SUITE }} -Denv=${{ env.ENV }}
+      - name: Upload Extent report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: extent-${{ env.SUITE }}-report-${{ env.ENV }}
+          path: reports/
+          if-no-files-found: ignore
